@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../theme/app_colors.dart';
 import '../../providers/transaction_provider.dart';
@@ -15,6 +16,9 @@ import '../../widgets/common/staggered_list_animation.dart';
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
+  static String _fmt(double v) =>
+      NumberFormat.compactCurrency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0).format(v);
+
   String _greeting() {
     final hour = DateTime.now().hour;
     if (hour < 11) return 'Selamat Pagi';
@@ -27,6 +31,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final summary = ref.watch(monthlySummaryProvider(now));
+    final totalBalance = ref.watch(totalBalanceProvider);
     final transactions = ref.watch(transactionsProvider);
     final categoryMap = ref.watch(categoryNameMapProvider);
     return Scaffold(
@@ -101,31 +106,55 @@ class DashboardScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'SALDO BULAN INI',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.2,
-                          ),
+                        Row(
+                          children: [
+                            const Text(
+                              'TOTAL SALDO',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(38),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'Semua Waktu',
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 10),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         AnimatedNumber(
-                          value: summary.balance,
+                          value: totalBalance.balance,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 28,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Bulan ini: +${_fmt(summary.totalIncome)}  /  -${_fmt(summary.totalExpense)}',
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 11),
+                        ),
                         const SizedBox(height: 16),
                         Row(
                           children: [
                             Expanded(
                               child: _MiniStat(
-                                label: 'Pemasukan',
-                                value: summary.totalIncome,
+                                label: 'Total Masuk',
+                                value: totalBalance.totalIncome,
                                 icon: Icons.arrow_downward,
                                 color: AppColors.income,
                               ),
@@ -133,8 +162,8 @@ class DashboardScreen extends ConsumerWidget {
                             const SizedBox(width: 16),
                             Expanded(
                               child: _MiniStat(
-                                label: 'Pengeluaran',
-                                value: summary.totalExpense,
+                                label: 'Total Keluar',
+                                value: totalBalance.totalExpense,
                                 icon: Icons.arrow_upward,
                                 color: AppColors.expense,
                               ),

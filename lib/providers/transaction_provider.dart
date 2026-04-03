@@ -24,6 +24,28 @@ final transactionsByAccountProvider =
       .getTransactions(accountId: accountId);
 });
 
+// Total saldo kumulatif dari semua transaksi sepanjang waktu
+final totalBalanceProvider = Provider<_TotalBalance>((ref) {
+  final transactions = ref.watch(transactionsProvider).value ?? [];
+  double income = 0;
+  double expense = 0;
+  for (final txn in transactions) {
+    if (txn.isIncome) {
+      income += txn.amount;
+    } else {
+      expense += txn.amount;
+    }
+  }
+  return _TotalBalance(totalIncome: income, totalExpense: expense);
+});
+
+class _TotalBalance {
+  final double totalIncome;
+  final double totalExpense;
+  _TotalBalance({required this.totalIncome, required this.totalExpense});
+  double get balance => totalIncome - totalExpense;
+}
+
 // Monthly summary
 final monthlySummaryProvider =
     Provider.family<MonthlySummary, DateTime>((ref, month) {
