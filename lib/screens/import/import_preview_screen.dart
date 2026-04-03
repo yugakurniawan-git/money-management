@@ -11,6 +11,7 @@ import '../../widgets/common/glass_container.dart';
 import '../../widgets/common/animated_number.dart';
 import '../../widgets/common/staggered_list_animation.dart';
 import '../../widgets/common/gradient_button.dart';
+import 'uncategorized_screen.dart';
 
 class ImportPreviewScreen extends ConsumerStatefulWidget {
   final List<TransactionModel> transactions;
@@ -110,16 +111,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
           await service.replaceTransactions(idsToDelete, _transactions);
 
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '${newTransactions.length} baru + $duplicateCount ditimpa = '
-                  '${_transactions.length} transaksi berhasil diimport',
-                ),
-                backgroundColor: AppColors.income,
-              ),
-            );
-            Navigator.of(context).pop();
+            await _checkUncategorized(_transactions, _transactions.length);
           }
           return;
         }
@@ -129,16 +121,8 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${newTransactions.length} transaksi baru disimpan'
-                ' ($duplicateCount duplikat diskip)',
-              ),
-              backgroundColor: AppColors.income,
-            ),
-          );
-          Navigator.of(context).pop();
+          await _checkUncategorized(newTransactions, newTransactions.length,
+              skipped: duplicateCount);
         }
         return;
       }
@@ -146,14 +130,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
       await service.addTransactions(newTransactions);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                '${newTransactions.length} transaksi berhasil diimport'),
-            backgroundColor: AppColors.income,
-          ),
-        );
-        Navigator.of(context).pop();
+        await _checkUncategorized(newTransactions, newTransactions.length);
       }
     } catch (e) {
       if (mounted) {
@@ -166,6 +143,155 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  /// Setelah simpan: cek transaksi tanpa kategori, tawarkan untuk update
+  Future<void> _checkUncategorized(
+    List<TransactionModel> saved,
+    int totalSaved, {
+    int skipped = 0,
+  }) async {
+    final uncategorized =
+        saved.where((t) => t.isExpense && t.categoryId.isEmpty).toList();
+
+    final baseMsg = '$totalSaved transaksi berhasil diimport'
+        '${skipped > 0 ? ' ($skipped duplikat diskip)' : ''}';
+
+    if (uncategorized.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(baseMsg),
+          backgroundColor: AppColors.income,
+        ));
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    // Ada transaksi tanpa kategori — tampilkan dialog pilihan
+    if (!mounted) return;
+    final goUpdate = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.darkCard,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.amber.withAlpha(26),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.label_off_outlined,
+                    color: Colors.amber, size: 30),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Ada Transaksi Tanpa Kategori',
+                textAlign: TextAlign.center,
+                style:
+                    TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              GlassContainer(
+                padding: const EdgeInsets.all(14),
+                margin: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    _dialogInfoRow(
+                      Icons.check_circle_outline,
+                      'Berhasil diimport',
+                      '$totalSaved transaksi',
+                      AppColors.income,
+                    ),
+                    const SizedBox(height: 8),
+                    _dialogInfoRow(
+                      Icons.label_off_outlined,
+                      'Belum berkategori',
+                      '${uncategorized.length} transaksi',
+                      Colors.amber,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '${uncategorized.length} transaksi pengeluaran tidak menemukan kategori yang cocok. Mau diatur sekarang?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: GradientButton(
+                  text: 'Update Kategori Sekarang',
+                  icon: Icons.edit_outlined,
+                  onPressed: () => Navigator.pop(ctx, true),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(
+                        color: AppColors.primary.withAlpha(100)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: Icon(Icons.skip_next,
+                      color: AppColors.primary, size: 20),
+                  label: Text(
+                    'Skip, Atur Nanti',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (goUpdate == true) {
+      // Navigasi ke halaman kategorisasi manual
+      await Navigator.of(context).push(PageRouteBuilder(
+        pageBuilder: (_, anim, __) =>
+            UncategorizedScreen(transactions: uncategorized),
+        transitionsBuilder: (_, anim, __, child) => SlideTransition(
+          position: Tween(
+                  begin: const Offset(1.0, 0), end: Offset.zero)
+              .animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
+        transitionDuration: const Duration(milliseconds: 350),
+      ));
+    } else {
+      // Skip — kembali ke halaman sebelumnya
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '$baseMsg · ${uncategorized.length} belum berkategori'),
+          backgroundColor: AppColors.income,
+        ));
+        Navigator.of(context).pop();
+      }
     }
   }
 
