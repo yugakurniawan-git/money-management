@@ -30,4 +30,4 @@ jobs:
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASS }}
           local-dir: build/web/
-          server-dir: ${{ secrets.FTP_PATH }}
+          server-dir: /management.yugakurniawan.com/
