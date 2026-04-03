@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../providers/transaction_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/insight_provider.dart';
 import '../../widgets/charts/monthly_bar_chart.dart';
 import '../../widgets/charts/category_pie_chart.dart';
 
@@ -13,6 +14,7 @@ import '../../widgets/common/transaction_tile.dart';
 import '../../widgets/common/glass_container.dart';
 import '../../widgets/common/animated_number.dart';
 import '../../widgets/common/staggered_list_animation.dart';
+import '../insights/insights_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -37,6 +39,8 @@ class DashboardScreen extends ConsumerWidget {
     final categoryMap = ref.watch(categoryNameMapProvider);
     final budgetSummary = ref.watch(budgetSummaryProvider(now));
     final budgetStatuses = ref.watch(budgetStatusProvider(now));
+    final prediction = ref.watch(spendingPredictionProvider);
+    final leakReport = ref.watch(leakDetectorProvider(now));
     return Scaffold(
       body: transactions.when(
         loading: () => const _DashboardEmpty(),
@@ -194,9 +198,22 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ],
 
-                // Bar Chart
+                // Insights Preview
                 StaggeredListItem(
                   index: budgetStatuses.isNotEmpty ? 4 : 2,
+                  child: _SectionHeader(title: 'ANALISIS BULAN INI'),
+                ),
+                StaggeredListItem(
+                  index: budgetStatuses.isNotEmpty ? 5 : 3,
+                  child: _InsightPreviewCard(
+                    prediction: prediction,
+                    leakReport: leakReport,
+                  ),
+                ),
+
+                // Bar Chart
+                StaggeredListItem(
+                  index: budgetStatuses.isNotEmpty ? 6 : 4,
                   child: _SectionHeader(title: 'PENGELUARAN 6 BULAN'),
                 ),
                 StaggeredListItem(
@@ -533,6 +550,193 @@ class _BudgetOverviewCard extends StatelessWidget {
 
   String _categoryLabel(BudgetStatus s) =>
       categoryNames[s.budget.categoryId] ?? 'Kategori';
+}
+
+// ── Insight Preview Card ──────────────────────────────────────────────────────
+
+class _InsightPreviewCard extends StatelessWidget {
+  final SpendingPrediction prediction;
+  final LeakReport leakReport;
+
+  const _InsightPreviewCard({
+    required this.prediction,
+    required this.leakReport,
+  });
+
+  static final _compact =
+      NumberFormat.compactCurrency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = prediction.percentageVsAvg;
+    final bool isCheaper = pct < 0.95;
+    final bool isExpensive = pct > 1.05;
+
+    final Color predColor = isCheaper
+        ? const Color(0xFF43A047)
+        : isExpensive
+            ? const Color(0xFFFF9800)
+            : AppColors.primary;
+
+    final String predLabel = isCheaper
+        ? 'Lebih Hemat 🎉'
+        : isExpensive
+            ? 'Lebih Boros ⚠️'
+            : 'Sesuai Rata-rata';
+
+    return GlassContainer(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Prediction mini card
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: predColor.withAlpha(26),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: predColor.withAlpha(77)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('📈', style: TextStyle(fontSize: 14)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Prediksi',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _compact.format(prediction.predictedTotal),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: predColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        predLabel,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: predColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Leak mini card
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: leakReport.hasLeaks
+                        ? AppColors.expense.withAlpha(26)
+                        : const Color(0xFF43A047).withAlpha(26),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: leakReport.hasLeaks
+                          ? AppColors.expense.withAlpha(77)
+                          : const Color(0xFF43A047).withAlpha(77),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('💸', style: TextStyle(fontSize: 14)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Uang Bocor',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        leakReport.hasLeaks
+                            ? _compact.format(leakReport.totalLeakAmount)
+                            : 'Aman',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: leakReport.hasLeaks
+                              ? AppColors.expense
+                              : const Color(0xFF43A047),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        leakReport.hasLeaks
+                            ? '${leakReport.leaks.length} kategori bocor'
+                            : 'Tidak ada kebocoran',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: leakReport.hasLeaks
+                              ? AppColors.expense
+                              : const Color(0xFF43A047),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const InsightsScreen(),
+                ),
+              );
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ShaderMask(
+                  shaderCallback: (bounds) =>
+                      AppColors.primaryGradient.createShader(bounds),
+                  child: const Text(
+                    'Lihat Detail Analisis →',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DashboardEmpty extends StatelessWidget {
