@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter --version)",
+      "Read(//Users/yugakurniawan/development/flutter/bin/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Bash(curl -LO https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.29.2-stable.zip)",
+      "Bash(unzip -q flutter_macos_arm64_3.29.2-stable.zip)",
+      "Bash(export PATH=\"$HOME/development/flutter/bin:$PATH\")",
+      "Bash(flutter create:*)",
+      "Bash(flutter pub:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(export PATH=\"$HOME/development/flutter/bin:$PATH:$HOME/.pub-cache/bin\")",
+      "Bash(dart pub:*)",
+      "Bash(tar -xzf node-v22.14.0-darwin-arm64.tar.gz)",
+      "Bash(export PATH=\"$HOME/development/node-v22.14.0-darwin-arm64/bin:$HOME/development/flutter/bin:$HOME/.pub-cache/bin:$PATH\")",
+      "Bash(npm --version)",
+      "Bash(npm install:*)",
+      "Bash(open -a \"Visual Studio Code\" /Users/yugakurniawan/VSC/money-management)",
+      "WebSearch",
+      "Bash(flutter run:*)",
+      "Bash(~/development/flutter/bin/flutter analyze:*)",
+      "Bash(~/development/flutter/bin/flutter run:*)",
+      "Bash(lsof -ti:8080)",
+      "Bash(xargs kill:*)",
+      "Bash(~/development/flutter/bin/flutter pub:*)",
+      "WebFetch(domain:goapi.io)",
+      "WebFetch(domain:www.postman.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git init:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

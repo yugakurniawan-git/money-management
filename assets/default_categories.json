@@ -1,0 +1,223 @@
+[
+  {
+    "name": "Makan & Minum",
+    "icon": "restaurant",
+    "color": 4294924066,
+    "type": "expense",
+    "keywords": [
+      "GOFOOD", "GRABFOOD", "SHOPEE FOOD", "KFC", "MCDONALD", "STARBUCKS",
+      "CHATIME", "HOKBEN", "PIZZA", "BURGER", "RESTO", "CAFE", "WARUNG",
+      "BAKSO", "MIE AYAM", "NASI", "SOTO", "AYAM", "KANTIN", "CATERING",
+      "DAPUR", "KEDAI", "DEPOT", "RUMAH MAKAN", "RM ", "SATE", "MARTABAK",
+      "PADANG", "SUSHI", "RAMEN", "DIMSUM", "GEPREK", "RENDANG", "PECEL",
+      "RAWON", "SEAFOOD", "BEBEK", "IKAN", "SAMBEL", "SAMBAL",
+      "ES TEH", "ES JERUK", "BOBA", "BUBBLE", "TEA", "JUICE",
+      "KOPI", "COFFEE", "ZEEN", "JANJI JIWA", "KOPI KENANGAN", "FORE",
+      "MIXUE", "HAUS", "TEGUK", "TOMORO", "FLASH COFFEE", "NGOPI",
+      "MAKAN", "FOOD", "MAKANAN", "MINUMAN", "DRINK"
+    ]
+  },
+  {
+    "name": "Minimarket & Grocery",
+    "icon": "shopping_bag",
+    "color": 4289920857,
+    "type": "expense",
+    "keywords": [
+      "INDOMARET", "INDOMA", "IDM", "ALFAMART", "ALFAMIDI", "ALFA",
+      "CIRCLE K", "LAWSON", "FAMILYMART", "FAMILY MART",
+      "SUPERINDO", "GIANT", "HYPERMART", "TRANSMART", "LOTTEMART",
+      "FARMERS", "HERO", "RANCH MARKET", "SUPER MARKET", "SWALAYAN",
+      "TOKO", "MINIMARKET"
+    ]
+  },
+  {
+    "name": "Top-up E-Wallet",
+    "icon": "account_balance_wallet",
+    "color": 4278238420,
+    "type": "expense",
+    "keywords": [
+      "GOPAY", "TOPUP", "TOP UP", "TOP-UP",
+      "OVO", "DANA", "SHOPEEPAY", "SHOPEE PAY",
+      "LINKAJA", "LINK AJA", "ISAKU", "SAKUKU",
+      "JENIUS", "FLIP", "E-WALLET", "EWALLET", "DOMPET DIGITAL"
+    ]
+  },
+  {
+    "name": "Pulsa & Internet",
+    "icon": "wifi",
+    "color": 4278228616,
+    "type": "expense",
+    "keywords": [
+      "TELKOMSEL", "TELKOM", "XL", "INDOSAT", "SMARTFREN", "BY.U",
+      "TRI", "THREE", "AXIS", "INDIHOME", "MYREPUBLIC", "FIRST MEDIA",
+      "BIZNET", "CBN", "MNC PLAY", "OXYGEN", "ICONNET",
+      "PULSA", "PAKET DATA", "INTERNET", "WIFI", "KUOTA"
+    ]
+  },
+  {
+    "name": "Transfer Keluar",
+    "icon": "arrow_upward",
+    "color": 4294198070,
+    "type": "expense",
+    "keywords": [
+      "TRSF E-BANKING DB", "BI-FAST DB TRANSFER", "SWITCHING DB TRF",
+      "TRANSFER KE"
+    ]
+  },
+  {
+    "name": "Biaya Bank & Admin",
+    "icon": "account_balance",
+    "color": 4288585374,
+    "type": "expense",
+    "keywords": [
+      "BIAYA ADM", "BIAYA ADMIN", "BIAYA TXN", "BIAYA TRANSAKSI",
+      "BIAYA TRANSFER", "BIAYA SMS", "BIAYA ATM", "BIAYA KARTU",
+      "ADM FEE", "ADMIN FEE", "MONTHLY FEE", "ANNUAL FEE",
+      "SWITCHING DB BIAYA", "BI-FAST DB BIAYA", "TAX", "PAJAK BUNGA"
+    ]
+  },
+  {
+    "name": "Transport & Kendaraan",
+    "icon": "directions_car",
+    "color": 4280391411,
+    "type": "expense",
+    "keywords": [
+      "GRAB ", "GOJEK", "MAXIM", "BLUE BIRD", "TAXI", "TAKSI",
+      "PARKIR", "PARKING", "BENSIN", "PERTAMINA", "SHELL", "VIVO",
+      "BP ", "TOL", "E-TOLL", "ETOLL", "FLAZZ",
+      "SERVIS MOBIL", "BENGKEL", "CUCI MOBIL", "CUCI MOTOR",
+      "SPAREPART", "ASTRA", "AHASS", "AUTO2000"
+    ]
+  },
+  {
+    "name": "Belanja & Fashion",
+    "icon": "shopping_cart",
+    "color": 4294940672,
+    "type": "expense",
+    "keywords": [
+      "SHOPEE", "TOKOPEDIA", "LAZADA", "TIKTOK SHOP", "BLIBLI",
+      "BUKALAPAK", "ZALORA", "UNIQLO", "H&M", "HNM", "ZARA",
+      "MINISO", "MATAHARI", "RAMAYANA", "COTTON ON", "PULL&BEAR",
+      "BERSHKA", "STRADIVARIUS", "MARKS", "ACE HARDWARE", "MR DIY",
+      "ELECTRONIC", "ERAFONE", "IBOX"
+    ]
+  },
+  {
+    "name": "Hiburan & Lifestyle",
+    "icon": "movie",
+    "color": 4284955319,
+    "type": "expense",
+    "keywords": [
+      "CINEMA", "BIOSKOP", "CGV", "XXI", "PREMIERE", "CINEPOLIS",
+      "NETFLIX", "SPOTIFY", "YOUTUBE", "DISNEY", "VIDIO", "VISIONPLUS",
+      "GAME", "STEAM", "PLAYSTATION", "PS ", "XBOX", "NINTENDO",
+      "KARAOKE", "BOWLING", "BILLIARD", "ESCAPE ROOM",
+      "TAMAN", "WATERBOOM", "WATERPARK", "DUFAN", "ANCOL", "BALI ZOO"
+    ]
+  },
+  {
+    "name": "Olahraga & Fitness",
+    "icon": "fitness_center",
+    "color": 4283215696,
+    "type": "expense",
+    "keywords": [
+      "BADMINTON", "TARUNA BAD", "GOR ", "LAPANGAN",
+      "GYM", "FITNESS", "FITNES", "CELEBRITY FITNESS",
+      "ANYTIME FITNESS", "GOLD GYM", "YOGA", "PILATES",
+      "FUTSAL", "SWIMMING", "RENANG", "BASKET",
+      "SPORT", "OLAHRAGA"
+    ]
+  },
+  {
+    "name": "Laundry",
+    "icon": "local_laundry_service",
+    "color": 4282339765,
+    "type": "expense",
+    "keywords": [
+      "LAUNDRY", "LAUND", "CUCI BAJU", "DRY CLEAN", "CLEANERS",
+      "WASH", "RIZA LAUND"
+    ]
+  },
+  {
+    "name": "Kesehatan & Obat",
+    "icon": "local_hospital",
+    "color": 4293467747,
+    "type": "expense",
+    "keywords": [
+      "APOTEK", "KIMIA FARMA", "CENTURY", "VIVA APOTEK",
+      "RUMAH SAKIT", "RS ", "KLINIK", "DOKTER", "BPJS",
+      "OBAT", "LABORATORIUM", "LAB ", "PRODIA",
+      "OPTIK", "DENTAL", "GIGI"
+    ]
+  },
+  {
+    "name": "Listrik & Utilitas",
+    "icon": "bolt",
+    "color": 4294961979,
+    "type": "expense",
+    "keywords": [
+      "PLN", "TOKEN LISTRIK", "LISTRIK",
+      "PDAM", "AIR ", "PAM ",
+      "GAS", "PGN", "SAMPAH", "IURAN"
+    ]
+  },
+  {
+    "name": "Pendidikan",
+    "icon": "school",
+    "color": 4278238420,
+    "type": "expense",
+    "keywords": [
+      "SEKOLAH", "UNIVERSITAS", "KAMPUS", "SPP", "UKT",
+      "KURSUS", "BIMBEL", "LES ",
+      "UDEMY", "COURSERA", "SKILLSHARE", "LINKEDIN LEARN",
+      "BUKU", "BOOK"
+    ]
+  },
+  {
+    "name": "Tarik Tunai",
+    "icon": "atm",
+    "color": 4288585374,
+    "type": "expense",
+    "keywords": [
+      "TARIKAN ATM", "TARIK TUNAI", "ATM WITHDRAW", "CASH WITHDRAWAL"
+    ]
+  },
+  {
+    "name": "Gaji & Payroll",
+    "icon": "payments",
+    "color": 4278241363,
+    "type": "income",
+    "keywords": [
+      "GAJI", "SALARY", "PAYROLL", "PAYROL",
+      "KR OTOMATIS", "WORLD HOST",
+      "THR", "BONUS", "INSENTIF", "INCENTIVE"
+    ]
+  },
+  {
+    "name": "Transfer Masuk",
+    "icon": "arrow_downward",
+    "color": 4278241363,
+    "type": "income",
+    "keywords": [
+      "TRSF E-BANKING CR", "BI-FAST CR", "TRANSFER MASUK",
+      "TRSF CR", "CR DARI", "SETORAN"
+    ]
+  },
+  {
+    "name": "Bunga & Cashback",
+    "icon": "trending_up",
+    "color": 4278241363,
+    "type": "income",
+    "keywords": [
+      "BUNGA", "INTEREST", "CASHBACK", "CASH BACK",
+      "REWARD", "REFUND", "REVERSAL"
+    ]
+  },
+  {
+    "name": "Lainnya",
+    "icon": "more_horiz",
+    "color": 4288585374,
+    "type": "both",
+    "keywords": []
+  }
+]

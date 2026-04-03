@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "490949935055",
+    "project_id": "money-management-a499a",
+    "storage_bucket": "money-management-a499a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:490949935055:android:aa97d0bcc0fcaa8f1bdcba",
+        "android_client_info": {
+          "package_name": "com.yugakurniawan.money_management"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2VlGs9SMOtu_k3y8f56A1hNAh4uIrB98"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
