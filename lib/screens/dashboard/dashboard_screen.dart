@@ -7,6 +7,8 @@ import '../../providers/transaction_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/insight_provider.dart';
+import '../../providers/health_score_provider.dart';
+import '../../providers/goal_provider.dart';
 import '../../widgets/charts/monthly_bar_chart.dart';
 import '../../widgets/charts/category_pie_chart.dart';
 
@@ -15,6 +17,8 @@ import '../../widgets/common/glass_container.dart';
 import '../../widgets/common/animated_number.dart';
 import '../../widgets/common/staggered_list_animation.dart';
 import '../insights/insights_screen.dart';
+import '../report/report_screen.dart';
+import '../goals/goals_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -41,6 +45,8 @@ class DashboardScreen extends ConsumerWidget {
     final budgetStatuses = ref.watch(budgetStatusProvider(now));
     final prediction = ref.watch(spendingPredictionProvider);
     final leakReport = ref.watch(leakDetectorProvider(now));
+    final healthScore = ref.watch(healthScoreProvider);
+    final goals = ref.watch(goalsProvider).value ?? [];
     return Scaffold(
       body: transactions.when(
         loading: () => const _DashboardEmpty(),
@@ -182,14 +188,20 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
 
+                // Health Score Card
+                StaggeredListItem(
+                  index: 2,
+                  child: _HealthScoreCard(healthScore: healthScore),
+                ),
+
                 // Budget Overview
                 if (budgetStatuses.isNotEmpty) ...[
                   StaggeredListItem(
-                    index: 2,
+                    index: 3,
                     child: _SectionHeader(title: 'BUDGET BULAN INI'),
                   ),
                   StaggeredListItem(
-                    index: 3,
+                    index: 4,
                     child: _BudgetOverviewCard(
                       summary: budgetSummary,
                       statuses: budgetStatuses,
@@ -198,9 +210,109 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ],
 
+                // Goals Preview
+                Builder(builder: (context) {
+                  final activeGoals =
+                      goals.where((g) => !g.isCompleted).take(2).toList();
+                  if (goals.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      StaggeredListItem(
+                        index: 5,
+                        child: _SectionHeader(title: 'TUJUAN KEUANGAN'),
+                      ),
+                      StaggeredListItem(
+                        index: 6,
+                        child: GlassContainer(
+                          margin: const EdgeInsets.only(bottom: 20),
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            children: [
+                              ...activeGoals.map((goal) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(goal.emoji,
+                                                style: const TextStyle(
+                                                    fontSize: 18)),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                goal.title,
+                                                style: const TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight:
+                                                        FontWeight.w600),
+                                              ),
+                                            ),
+                                            Text(
+                                              '${(goal.progress * 100).toStringAsFixed(0)}%',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: AppColors.primary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 5),
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(3),
+                                          child: LinearProgressIndicator(
+                                            value: goal.progress,
+                                            backgroundColor:
+                                                AppColors.darkCard,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    AppColors.primary),
+                                            minHeight: 5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )),
+                              GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const GoalsScreen()),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    ShaderMask(
+                                      shaderCallback: (bounds) =>
+                                          AppColors.primaryGradient
+                                              .createShader(bounds),
+                                      child: const Text(
+                                        'Lihat Semua →',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+
                 // Insights Preview
                 StaggeredListItem(
-                  index: budgetStatuses.isNotEmpty ? 4 : 2,
+                  index: budgetStatuses.isNotEmpty ? 7 : 5,
                   child: _SectionHeader(title: 'ANALISIS BULAN INI'),
                 ),
                 StaggeredListItem(
@@ -254,17 +366,41 @@ class DashboardScreen extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _SectionHeader(title: 'TRANSAKSI TERBARU'),
-                      ShaderMask(
-                        shaderCallback: (bounds) =>
-                            AppColors.primaryGradient.createShader(bounds),
-                        child: const Text(
-                          'Lihat Semua',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const ReportScreen()),
+                            ),
+                            child: ShaderMask(
+                              shaderCallback: (bounds) =>
+                                  AppColors.primaryGradient.createShader(bounds),
+                              child: const Text(
+                                '📊 Laporan',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          ShaderMask(
+                            shaderCallback: (bounds) =>
+                                AppColors.primaryGradient.createShader(bounds),
+                            child: const Text(
+                              'Lihat Semua',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -313,6 +449,139 @@ class DashboardScreen extends ConsumerWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ── HealthScoreCard ───────────────────────────────────────────────────────────
+
+class _HealthScoreCard extends StatelessWidget {
+  final HealthScore healthScore;
+  const _HealthScoreCard({required this.healthScore});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const InsightsScreen()),
+      ),
+      child: GlassContainer(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // Score + Grade
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  '${healthScore.score}',
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    color: healthScore.gradeColor,
+                  ),
+                ),
+                Text(
+                  healthScore.gradeEmoji,
+                  style: const TextStyle(fontSize: 18),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  healthScore.grade,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: healthScore.gradeColor,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                SizedBox(
+                  width: 72,
+                  child: Text(
+                    healthScore.gradeLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: healthScore.gradeColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 16),
+            // Factor bars
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SKOR KESEHATAN KEUANGAN',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...healthScore.factors.map((f) => Padding(
+                        padding: const EdgeInsets.only(bottom: 7),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  f.label,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                                Text(
+                                  '${f.score}/${f.maxScore}',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(3),
+                              child: LinearProgressIndicator(
+                                value: f.maxScore > 0
+                                    ? f.score / f.maxScore
+                                    : 0,
+                                backgroundColor: AppColors.darkCard,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    healthScore.gradeColor),
+                                minHeight: 4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 2),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Tap untuk detail →',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

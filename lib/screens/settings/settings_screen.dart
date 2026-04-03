@@ -12,6 +12,7 @@ import '../../widgets/common/glass_container.dart';
 import '../../widgets/common/staggered_list_animation.dart';
 import '../../widgets/common/gradient_button.dart';
 import '../categories/category_screen.dart';
+import '../investasi/investasi_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -143,6 +144,42 @@ class SettingsScreen extends ConsumerWidget {
                     const Expanded(
                       child: Text('Kelola Kategori',
                           style: TextStyle(fontWeight: FontWeight.w500)),
+                    ),
+                    Icon(Icons.chevron_right,
+                        color: AppColors.textSecondary, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Investasi & Saham
+          StaggeredListItem(
+            index: 3,
+            child: GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const InvestasiScreen()),
+              ),
+              child: GlassContainer(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Icon(Icons.trending_up,
+                        color: AppColors.primary, size: 22),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Investasi & Saham',
+                              style: TextStyle(fontWeight: FontWeight.w500)),
+                          Text('Watchlist dan uang dingin',
+                              style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
                     ),
                     Icon(Icons.chevron_right,
                         color: AppColors.textSecondary, size: 20),

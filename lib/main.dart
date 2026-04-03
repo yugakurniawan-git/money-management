@@ -14,8 +14,8 @@ import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/import/import_screen.dart';
 import 'screens/transactions/transaction_list_screen.dart';
 import 'screens/settings/settings_screen.dart';
-import 'screens/investasi/investasi_screen.dart';
 import 'screens/budget/budget_screen.dart';
+import 'screens/goals/goals_screen.dart';
 import 'providers/category_provider.dart';
 import 'services/firebase_service.dart';
 
@@ -148,7 +148,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     TransactionListScreen(),
     ImportScreen(),
     BudgetScreen(),
-    InvestasiScreen(),
+    GoalsScreen(),
     SettingsScreen(),
   ];
 
@@ -157,7 +157,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     _NavItemData(icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long, label: 'Transaksi'),
     _NavItemData(icon: Icons.upload_file_outlined, activeIcon: Icons.upload_file, label: 'Import'),
     _NavItemData(icon: Icons.savings_outlined, activeIcon: Icons.savings, label: 'Budget'),
-    _NavItemData(icon: Icons.trending_up_outlined, activeIcon: Icons.trending_up, label: 'Investasi'),
+    _NavItemData(icon: Icons.flag_outlined, activeIcon: Icons.flag, label: 'Tujuan'),
     _NavItemData(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
   ];
 

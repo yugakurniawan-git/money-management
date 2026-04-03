@@ -6,6 +6,7 @@ import '../models/account.dart';
 import '../models/family.dart';
 import '../models/stock.dart';
 import '../models/budget.dart';
+import '../models/goal.dart';
 
 class FirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -236,6 +237,24 @@ class FirebaseService {
 
   Future<void> deleteBudget(String budgetId) async {
     await _budgetsRef.doc(budgetId).delete();
+  }
+
+  // ===== GOALS =====
+
+  CollectionReference get _goalsRef =>
+      _firestore.collection('users').doc(_userId).collection('goals');
+
+  Stream<List<GoalModel>> getGoals() {
+    return _goalsRef.orderBy('createdAt').snapshots().map(
+        (s) => s.docs.map((d) => GoalModel.fromFirestore(d)).toList());
+  }
+
+  Future<void> setGoal(GoalModel goal) async {
+    await _goalsRef.doc(goal.id).set(goal.toFirestore());
+  }
+
+  Future<void> deleteGoal(String goalId) async {
+    await _goalsRef.doc(goalId).delete();
   }
 
   // ===== RESET =====
