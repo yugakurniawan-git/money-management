@@ -1,41 +1,59 @@
 workflows:
   ios-workflow:
-    name: iOS Build
+    name: iOS Build & Deploy to Server
     max_build_duration: 60
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
+      vars:
+        BUNDLE_ID: "com.yugakurniawan.moneyManagement"
+      # Tambahkan env vars ini di Codemagic dashboard (Settings → Environment variables):
+      # FTP_HOST      → ftp.domainmu.com
+      # FTP_USER      → username FTP
+      # FTP_PASS      → password FTP
+      # FTP_PATH      → /public_html/app/  (folder di server)
+      # SERVER_URL    → https://domainmu.com/app
+
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
+
       - name: Pod install
         script: |
-          find . -name "Podfile" -execdir pod install \;
-      - name: Build iOS
+          cd ios && pod install
+
+      - name: Build iOS (no codesign)
         script: |
           flutter build ios --release --no-codesign
-    artifacts:
-      - build/ios/iphoneos/Runner.app
-      - "**/*.ipa"
 
-  ios-adhoc:
-    name: iOS Ad Hoc (Installable)
-    max_build_duration: 60
-    environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
-      ios_signing:
-        distribution_type: ad_hoc
-    scripts:
-      - name: Get Flutter packages
-        script: flutter pub get
-      - name: Pod install
+      - name: Package as IPA
         script: |
-          find . -name "Podfile" -execdir pod install \;
-      - name: Build IPA
+          mkdir -p build/ios/ipa/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          cd build/ios/ipa
+          zip -r MoneyManagement.ipa Payload/
+          echo "IPA created: $(ls -lh MoneyManagement.ipa)"
+
+      - name: Upload to cPanel via FTP
         script: |
-          flutter build ipa --release
+          # Install lftp untuk FTP upload
+          brew install lftp || true
+
+          # Upload IPA dan halaman instalasi ke server
+          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" << EOF
+          set ssl:verify-certificate no
+          set ftp:ssl-allow yes
+          mkdir -p $FTP_PATH
+          cd $FTP_PATH
+          put build/ios/ipa/MoneyManagement.ipa
+          put install/index.html
+          bye
+          EOF
+
+          echo "✅ Upload selesai!"
+          echo "📲 Install URL: $SERVER_URL"
+
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/ios/ipa/MoneyManagement.ipa
+      - build/ios/iphoneos/Runner.app

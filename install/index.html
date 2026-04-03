@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Money Management - Install App</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      padding: 20px;
+    }
+    .card {
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 24px;
+      padding: 40px 32px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+    .icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 20px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+    }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .version {
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 32px;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      margin-bottom: 12px;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .info {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      margin-top: 24px;
+      line-height: 1.6;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: rgba(102,126,234,0.3);
+      border-radius: 20px;
+      font-size: 11px;
+      color: #a78bfa;
+      margin-bottom: 16px;
+    }
+    .steps {
+      text-align: left;
+      background: rgba(0,0,0,0.2);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 20px 0;
+    }
+    .steps p {
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+      padding: 6px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .step-num {
+      width: 22px;
+      height: 22px;
+      background: rgba(102,126,234,0.5);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">💰</div>
+    <span class="badge">Beta Testing</span>
+    <h1>Money Management</h1>
+    <p class="version">Versi terbaru • iOS 15+</p>
+
+    <a href="MoneyManagement.ipa" class="btn btn-primary" id="installBtn">
+      📲 Download & Install
+    </a>
+
+    <div class="steps">
+      <p><span class="step-num">1</span> Tap tombol di atas untuk download</p>
+      <p><span class="step-num">2</span> Pilih "Open with AltStore"</p>
+      <p><span class="step-num">3</span> Tunggu install selesai</p>
+      <p><span class="step-num">4</span> Buka app dari home screen</p>
+    </div>
+
+    <p class="info">
+      Butuh AltStore terinstall di iPhone.<br>
+      App berlaku 7 hari, refresh via AltStore.
+    </p>
+  </div>
+</body>
+</html>
