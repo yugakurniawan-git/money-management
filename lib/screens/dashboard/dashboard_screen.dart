@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../providers/transaction_provider.dart';
 import '../../providers/category_provider.dart';
+import '../../providers/budget_provider.dart';
 import '../../widgets/charts/monthly_bar_chart.dart';
 import '../../widgets/charts/category_pie_chart.dart';
 
@@ -34,6 +35,8 @@ class DashboardScreen extends ConsumerWidget {
     final totalBalance = ref.watch(totalBalanceProvider);
     final transactions = ref.watch(transactionsProvider);
     final categoryMap = ref.watch(categoryNameMapProvider);
+    final budgetSummary = ref.watch(budgetSummaryProvider(now));
+    final budgetStatuses = ref.watch(budgetStatusProvider(now));
     return Scaffold(
       body: transactions.when(
         loading: () => const _DashboardEmpty(),
@@ -175,9 +178,25 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
 
+                // Budget Overview
+                if (budgetStatuses.isNotEmpty) ...[
+                  StaggeredListItem(
+                    index: 2,
+                    child: _SectionHeader(title: 'BUDGET BULAN INI'),
+                  ),
+                  StaggeredListItem(
+                    index: 3,
+                    child: _BudgetOverviewCard(
+                      summary: budgetSummary,
+                      statuses: budgetStatuses,
+                      categoryNames: categoryMap,
+                    ),
+                  ),
+                ],
+
                 // Bar Chart
                 StaggeredListItem(
-                  index: 2,
+                  index: budgetStatuses.isNotEmpty ? 4 : 2,
                   child: _SectionHeader(title: 'PENGELUARAN 6 BULAN'),
                 ),
                 StaggeredListItem(
@@ -352,6 +371,168 @@ class _SectionHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Budget Overview Card (for dashboard) ─────────────────────────────────────
+
+class _BudgetOverviewCard extends StatelessWidget {
+  final BudgetSummary summary;
+  final List<BudgetStatus> statuses;
+  final Map<String, String> categoryNames;
+
+  const _BudgetOverviewCard({
+    required this.summary,
+    required this.statuses,
+    required this.categoryNames,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = summary.percentage.clamp(0.0, 1.0);
+    final overallColor = summary.overCount > 0
+        ? const Color(0xFFE53935)
+        : summary.warningCount > 0
+            ? const Color(0xFFFF9800)
+            : const Color(0xFF43A047);
+
+    final compactCurrency = NumberFormat.compactCurrency(
+      locale: 'id_ID',
+      symbol: 'Rp',
+      decimalDigits: 0,
+    );
+
+    // Show top 3 statuses sorted by percentage desc
+    final topStatuses = statuses.take(3).toList();
+
+    return GlassContainer(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Overall progress
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${compactCurrency.format(summary.totalSpent)} / ${compactCurrency.format(summary.totalLimit)}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                '${(pct * 100).toStringAsFixed(0)}% terpakai',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: pct,
+              backgroundColor: AppColors.darkCard,
+              valueColor: AlwaysStoppedAnimation<Color>(overallColor),
+              minHeight: 6,
+            ),
+          ),
+
+          if (summary.overCount > 0 || summary.warningCount > 0) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (summary.overCount > 0) ...[
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE53935),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '${summary.overCount} over budget',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFFE53935),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                if (summary.warningCount > 0) ...[
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF9800),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '${summary.warningCount} hampir habis',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFFFF9800),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+
+          if (topStatuses.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            ...topStatuses.map(
+              (s) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        _categoryLabel(s),
+                        style: const TextStyle(fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 5,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: s.percentage.clamp(0.0, 1.0),
+                          backgroundColor: AppColors.darkCard,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(s.statusColor),
+                          minHeight: 5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${(s.percentage * 100).toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: s.statusColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _categoryLabel(BudgetStatus s) =>
+      categoryNames[s.budget.categoryId] ?? 'Kategori';
 }
 
 class _DashboardEmpty extends StatelessWidget {

@@ -5,6 +5,7 @@ import '../models/category.dart';
 import '../models/account.dart';
 import '../models/family.dart';
 import '../models/stock.dart';
+import '../models/budget.dart';
 
 class FirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -217,6 +218,24 @@ class FirebaseService {
 
   Future<void> removeFromWatchlist(String itemId) async {
     await _watchlistRef.doc(itemId).delete();
+  }
+
+  // ===== BUDGET =====
+
+  CollectionReference get _budgetsRef =>
+      _firestore.collection('users').doc(_userId).collection('budgets');
+
+  Stream<List<BudgetModel>> getBudgets() {
+    return _budgetsRef.snapshots().map((s) =>
+        s.docs.map((d) => BudgetModel.fromFirestore(d)).toList());
+  }
+
+  Future<void> setBudget(BudgetModel budget) async {
+    await _budgetsRef.doc(budget.id).set(budget.toFirestore());
+  }
+
+  Future<void> deleteBudget(String budgetId) async {
+    await _budgetsRef.doc(budgetId).delete();
   }
 
   // ===== RESET =====
