@@ -30,9 +30,110 @@
       margin: 0;
       padding: 0;
     }
+    #ios-install-banner {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      background: rgba(26, 26, 46, 0.97);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(255,255,255,0.15);
+      padding: 16px 20px 32px;
+      flex-direction: column;
+      align-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: white;
+    }
+    #ios-install-banner .banner-close {
+      align-self: flex-end;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 0;
+      margin-bottom: 8px;
+    }
+    #ios-install-banner .banner-icon {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 12px;
+    }
+    #ios-install-banner h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    #ios-install-banner p {
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+      text-align: center;
+    }
+    #ios-install-banner .steps {
+      background: rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 12px 16px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #ios-install-banner .step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 5px 0;
+      font-size: 13px;
+      color: rgba(255,255,255,0.8);
+    }
+    #ios-install-banner .step-num {
+      width: 22px;
+      height: 22px;
+      background: rgba(102,126,234,0.5);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
+  <!-- iOS PWA Install Banner -->
+  <div id="ios-install-banner">
+    <button class="banner-close" onclick="document.getElementById('ios-install-banner').style.display='none'">✕</button>
+    <div class="banner-icon">💰</div>
+    <h3>Install Money Management</h3>
+    <p>Tambahkan ke Home Screen agar bisa dibuka seperti app</p>
+    <div class="steps">
+      <div class="step"><span class="step-num">1</span> Tap ikon <strong>Share</strong> (kotak dengan panah atas) di Safari</div>
+      <div class="step"><span class="step-num">2</span> Scroll dan pilih <strong>"Add to Home Screen"</strong></div>
+      <div class="step"><span class="step-num">3</span> Tap <strong>"Add"</strong> — selesai!</div>
+    </div>
+  </div>
+
+  <script>
+    // Show iOS install banner if on Safari iOS and not in standalone mode
+    (function() {
+      var isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+      var isStandalone = window.navigator.standalone === true;
+      if (isIos && !isStandalone) {
+        setTimeout(function() {
+          var banner = document.getElementById('ios-install-banner');
+          if (banner) banner.style.display = 'flex';
+        }, 2500);
+      }
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

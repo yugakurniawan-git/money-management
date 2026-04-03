@@ -258,6 +258,59 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 28),
 
+          // Reset Data
+          StaggeredListItem(
+            index: 5,
+            child: GradientButton(
+              text: 'Reset Semua Data',
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF6B35), Color(0xFFFF3D00)],
+              ),
+              icon: Icons.delete_sweep_outlined,
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Reset Semua Data?'),
+                    content: const Text(
+                        'Semua transaksi dan rekening akan dihapus permanen. Kategori tetap dipertahankan.\n\nTindakan ini tidak bisa dibatalkan.'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Batal')),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context, true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF6B35), Color(0xFFFF3D00)],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text('Hapus Semua',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true && context.mounted) {
+                  await FirebaseService().resetAllData();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Semua data berhasil direset')),
+                    );
+                  }
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // Logout
           StaggeredListItem(
             index: 6,

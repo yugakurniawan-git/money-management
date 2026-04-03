@@ -219,6 +219,24 @@ class FirebaseService {
     await _watchlistRef.doc(itemId).delete();
   }
 
+  // ===== RESET =====
+
+  /// Hapus semua transaksi, akun, dan watchlist user. Kategori dipertahankan.
+  Future<void> resetAllData() async {
+    final collections = [_transactionsRef, _accountsRef, _watchlistRef];
+    for (final ref in collections) {
+      var snapshot = await ref.limit(450).get();
+      while (snapshot.docs.isNotEmpty) {
+        final batch = _firestore.batch();
+        for (final doc in snapshot.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+        snapshot = await ref.limit(450).get();
+      }
+    }
+  }
+
   // ===== FAMILY =====
 
   Future<FamilyModel?> getFamily() async {
