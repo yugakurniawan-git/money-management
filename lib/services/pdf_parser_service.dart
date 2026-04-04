@@ -89,13 +89,21 @@ class PdfParserService {
     final year = _detectYear(lines);
     final summary = _parseSummary(lines);
 
-    // Primary: structured line-by-line parsing (no header detection needed)
-    var transactions = _parseTransactions(lines, accountId, year);
+    List<TransactionModel> transactions;
 
-    // Fallback: regex-based parsing on full text
-    if (transactions.isEmpty) {
-      debugPrint('=== Structured parsing found 0 transactions, trying regex fallback ===');
-      transactions = _parseWithRegex(fullText, accountId, year);
+    // Detect myBCA mobile format (standalone DD/MM/YYYY dates + MUTASI block)
+    if (_isMobileFormat(lines)) {
+      debugPrint('=== Detected myBCA MOBILE format ===');
+      transactions = _parseMobileFormat(lines, accountId);
+    } else {
+      // Primary: structured line-by-line parsing
+      transactions = _parseTransactions(lines, accountId, year);
+
+      // Fallback: regex-based parsing on full text
+      if (transactions.isEmpty) {
+        debugPrint('=== Structured parsing found 0 transactions, trying regex fallback ===');
+        transactions = _parseWithRegex(fullText, accountId, year);
+      }
     }
 
     debugPrint('=== PARSED ${transactions.length} TRANSACTIONS ===');
@@ -198,6 +206,260 @@ class PdfParserService {
       periode: periode,
       noRekening: noRekening,
     );
+  }
+
+  // ===== myBCA MOBILE FORMAT DETECTION =====
+
+  /// Returns true when standalone DD/MM/YYYY lines are found (myBCA mobile export)
+  bool _isMobileFormat(List<String> lines) {
+    int count = 0;
+    final fullDateRe = RegExp(r'^\d{2}/\d{2}/\d{4}$');
+    for (final line in lines) {
+      if (fullDateRe.hasMatch(line.trim())) {
+        count++;
+        if (count >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  // ===== myBCA MOBILE FORMAT PARSER =====
+
+  /// Parse the myBCA mobile export PDF where:
+  ///  - Each transaction's description/type lines come BEFORE the date
+  ///  - Date appears as a standalone DD/MM/YYYY line
+  ///  - All amounts are collected in a MUTASI column at the end
+  List<TransactionModel> _parseMobileFormat(
+      List<String> lines, String accountId) {
+    // ── Step 1: locate the trailing MUTASI amount block ────────────────────
+    // The last occurrence of a standalone "MUTASI" line that is followed
+    // by BCA-formatted amount lines marks the start of the amount column.
+    int mutasiIdx = -1;
+    for (int i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].trim() == 'MUTASI') {
+        bool hasAmounts = false;
+        for (int j = i + 1; j < lines.length && j < i + 10; j++) {
+          if (_bcaAmount.hasMatch(lines[j])) {
+            hasAmounts = true;
+            break;
+          }
+        }
+        if (hasAmounts) {
+          mutasiIdx = i;
+          break;
+        }
+      }
+    }
+
+    // ── Step 2: extract (amount, isDebit) pairs from the MUTASI block ──────
+    final amounts = <_MobileAmount>[];
+    if (mutasiIdx >= 0) {
+      for (int i = mutasiIdx + 1; i < lines.length; i++) {
+        final line = lines[i].trim();
+        // Skip SALDO column header if present
+        if (line == 'SALDO') continue;
+        final m = RegExp(r'(\d{1,3}(?:,\d{3})+\.\d{2})\s*(DB|CR)?')
+            .firstMatch(line);
+        if (m != null) {
+          final amount = _parseBcaAmount(m.group(1)!);
+          if (amount > 0) {
+            amounts.add(_MobileAmount(
+              amount: amount,
+              isDebit: (m.group(2) ?? 'DB') == 'DB',
+            ));
+          }
+        }
+      }
+    }
+    debugPrint('=== Mobile: found ${amounts.length} amounts in MUTASI block ===');
+
+    // ── Step 3: parse description blocks from the left/keterangan section ──
+    final descLines =
+        mutasiIdx >= 0 ? lines.sublist(0, mutasiIdx) : lines;
+
+    final fullDateRe = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$');
+    final blocks = <_MobileBlock>[];
+    _MobileBlock? cur;
+    DateTime? lastSeenDate;
+
+    for (final raw in descLines) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+      if (_isSkippableLine(line)) continue;
+      // Skip column header noise for this format
+      if (line == 'PEND' || line == 'MUTASI' || line == 'SALDO') continue;
+      if (line == 'TANGGAL' || line == 'KETERANGAN') continue;
+      // Skip standalone partial-header words
+      if (line == 'Rekening') continue;
+      // Skip header value lines (colon-prefixed: ": YUGA KURNIAWAN", ": IDR", etc.)
+      if (line.startsWith(':')) continue;
+
+      final dateMatch = fullDateRe.firstMatch(line);
+      if (dateMatch != null) {
+        // This date closes the current block
+        lastSeenDate = DateTime(
+          int.parse(dateMatch.group(3)!),
+          int.parse(dateMatch.group(2)!),
+          int.parse(dateMatch.group(1)!),
+        );
+        if (cur != null) {
+          cur.date = lastSeenDate;
+          blocks.add(cur);
+          cur = null;
+        }
+      } else {
+        // Accumulate description lines
+        cur ??= _MobileBlock();
+        cur.lines.add(line);
+      }
+    }
+    // Flush last block (no closing date line after the final transaction)
+    if (cur != null && cur.lines.isNotEmpty) {
+      // Try to extract date from reference code (e.g. 0204/FTSCY → 02/04)
+      cur.date = _extractDateFromReference(cur.lines, lastSeenDate);
+      if (cur.date != null) blocks.add(cur);
+    }
+    debugPrint('=== Mobile: found ${blocks.length} transaction blocks ===');
+
+    // ── Step 4: zip blocks with amounts to build transactions ───────────────
+    final transactions = <TransactionModel>[];
+    final count = blocks.length < amounts.length ? blocks.length : amounts.length;
+
+    for (int i = 0; i < count; i++) {
+      final block = blocks[i];
+      final amt = amounts[i];
+      if (block.date == null || amt.amount <= 0) continue;
+
+      final description = _buildMobileDescription(block.lines);
+      if (description.isEmpty) continue;
+
+      // Determine debit/credit from explicit keywords first, fall back to DB/CR marker
+      var type = amt.isDebit ? 'debit' : 'credit';
+      final upper = block.lines.join(' ').toUpperCase();
+      if (upper.contains('TRANSAKSI DEBIT') ||
+          upper.contains('TARIKAN ATM') ||
+          upper.contains('BIAYA ADM')) {
+        type = 'debit';
+      } else if (upper.contains('TRSF E-BANKING CR') ||
+          upper.contains('KR OTOMATIS') ||
+          upper.contains('SETORAN') ||
+          upper.contains('BUNGA')) {
+        type = 'credit';
+      }
+
+      final hash = _generateHash(block.date!, amt.amount, description);
+      transactions.add(TransactionModel(
+        id: _uuid.v4(),
+        accountId: accountId,
+        amount: amt.amount,
+        description: description,
+        rawDescription: block.lines.join(' '),
+        categoryId: '',
+        transactionType: type,
+        transactionDate: block.date!,
+        balanceAfter: 0,
+        importHash: hash,
+        createdAt: DateTime.now(),
+      ));
+      debugPrint(
+          'MOBILE TX: ${block.date} | $type | ${amt.amount} | $description');
+    }
+
+    return transactions;
+  }
+
+  /// Try to extract a date from lines like "0204/FTSCY/WS..." (DDMM prefix)
+  /// or fall back to [fallback].
+  DateTime? _extractDateFromReference(List<String> lines, DateTime? fallback) {
+    final now = DateTime.now();
+    final year = fallback?.year ?? now.year;
+    for (final line in lines) {
+      // Reference code: 0204/FTSCY/WS95031 → day=02, month=04
+      final m = RegExp(r'^(\d{2})(\d{2})/').firstMatch(line.trim());
+      if (m != null) {
+        final day = int.tryParse(m.group(1)!);
+        final month = int.tryParse(m.group(2)!);
+        if (day != null && month != null &&
+            day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+          return DateTime(year, month, day);
+        }
+      }
+    }
+    return fallback;
+  }
+
+  /// Build description from mobile format lines (skips type-indicator lines)
+  String _buildMobileDescription(List<String> rawLines) {
+    final parts = <String>[];
+    for (final line in rawLines) {
+      final l = line.trim();
+      if (l.isEmpty) continue;
+
+      // Transaction-type indicator lines — use as fallback description only
+      if (l.startsWith('TRANSAKSI DEBIT') ||
+          l.startsWith('TRSF E-BANKING CR') ||
+          l.startsWith('TRSF E-BANKING DB') ||
+          l.startsWith('BIAYA ADM')) {
+        if (parts.isEmpty) parts.add(l);
+        continue;
+      }
+      // TARIKAN ATM may have inline date: strip it
+      if (l.startsWith('TARIKAN ATM')) {
+        var cleaned = l.replaceAll(RegExp(r'\s+\d{2}/\d{2}$'), '').trim();
+        if (parts.isEmpty) parts.add(cleaned);
+        continue;
+      }
+
+      // Reference code lines: "0304/FTSCY/WS95271   10000.00HILDA FITRI ANGUL"
+      // → extract name after raw amount (if present)
+      if (RegExp(r'^\d{4}/\w+/\w+').hasMatch(l)) {
+        final nameMatch = RegExp(r'\d+\.00(.+)').firstMatch(l);
+        if (nameMatch != null) {
+          final name = nameMatch.group(1)!.trim();
+          if (name.isNotEmpty) parts.add(name);
+        }
+        continue;
+      }
+
+      // Skip phone numbers
+      if (RegExp(r'^\d{10,}$').hasMatch(l)) continue;
+
+      // Skip masked phones: Q0895XXXXXX54
+      if (RegExp(r'^Q\d+X+\d*').hasMatch(l)) continue;
+
+      // TGL: 0404  QRC 014  00000.00MERCHANT → extract merchant
+      if (RegExp(r'^TGL\s*:', caseSensitive: false).hasMatch(l)) {
+        final merchantMatch = _merchantPrefix.firstMatch(l);
+        if (merchantMatch != null) {
+          parts.add(merchantMatch.group(1)!.trim());
+        }
+        continue;
+      }
+
+      // Amounts only: skip
+      final lineWithoutAmounts = l
+          .replaceAll(_bcaAmount, '')
+          .replaceAll(RegExp(r'\bDB\b|\bCR\b'), '')
+          .trim();
+      if (lineWithoutAmounts.isEmpty) continue;
+
+      // Transfer with embedded raw amount: 10000.00HILDA FITRI → extract name
+      final nameAfterAmount = RegExp(r'\d+\.00(.+)').firstMatch(l);
+      if (nameAfterAmount != null) {
+        parts.add(nameAfterAmount.group(1)!.trim());
+        continue;
+      }
+
+      // Keep lines with letters (names, merchant names, etc.)
+      if (RegExp(r'[A-Za-z]{2,}').hasMatch(l)) {
+        var cleaned = l.replaceAll(_bcaAmount, '').trim();
+        cleaned = cleaned.replaceAll(RegExp(r'\bDB\b|\bCR\b'), '').trim();
+        cleaned = cleaned.replaceAll(RegExp(r'\b\d{3,}\.00\b'), '').trim();
+        if (cleaned.isNotEmpty) parts.add(cleaned);
+      }
+    }
+
+    return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   // ===== TRANSACTION PARSING (no header detection needed) =====
@@ -643,4 +905,15 @@ class _TxnBlock {
   final String dateStr;
   final List<String> lines;
   _TxnBlock({required this.dateStr, required this.lines});
+}
+
+class _MobileBlock {
+  List<String> lines = [];
+  DateTime? date;
+}
+
+class _MobileAmount {
+  final double amount;
+  final bool isDebit;
+  _MobileAmount({required this.amount, required this.isDebit});
 }
