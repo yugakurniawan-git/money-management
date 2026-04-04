@@ -91,12 +91,17 @@ class PdfParserService {
 
     List<TransactionModel> transactions;
 
-    // Detect myBCA mobile format (standalone DD/MM/YYYY dates + MUTASI block)
-    if (_isMobileFormat(lines)) {
-      debugPrint('=== Detected myBCA MOBILE format ===');
+    // Detect format — staggered check must come before plain mobile check
+    if (_isStaggeredMobileFormat(lines)) {
+      // Syncfusion merges same-y text: "03/04/2026    29,000.00 DB" on one line
+      debugPrint('=== Detected myBCA STAGGERED MOBILE format (Syncfusion merged) ===');
+      transactions = _parseStaggeredMobileFormat(lines, accountId);
+    } else if (_isMobileFormat(lines)) {
+      // pdfminer-style: standalone DD/MM/YYYY dates + trailing MUTASI block
+      debugPrint('=== Detected myBCA MOBILE format (column-separated) ===');
       transactions = _parseMobileFormat(lines, accountId);
     } else {
-      // Primary: structured line-by-line parsing
+      // KlikBCA desktop / structured line-by-line format
       transactions = _parseTransactions(lines, accountId, year);
 
       // Fallback: regex-based parsing on full text
@@ -208,7 +213,222 @@ class PdfParserService {
     );
   }
 
-  // ===== myBCA MOBILE FORMAT DETECTION =====
+  // ===== myBCA STAGGERED MOBILE FORMAT (Syncfusion output) =====
+
+  /// Syncfusion merges text elements at the same y-coordinate into one line.
+  /// In myBCA mobile PDFs the date column (x≈188) and the next-transaction
+  /// amount column (x≈2531) share the same y, so Syncfusion produces lines
+  /// like "03/04/2026    29,000.00 DB".  We detect this by looking for at
+  /// least two lines that contain both a full DD/MM/YYYY date and a BCA amount.
+  bool _isStaggeredMobileFormat(List<String> lines) {
+    final re = RegExp(r'\d{2}/\d{2}/\d{4}.+\d{1,3}(?:,\d{3})+\.\d{2}');
+    int count = 0;
+    for (final line in lines) {
+      if (re.hasMatch(line.trim())) {
+        if (++count >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  /// Parse myBCA mobile PDF as extracted by Syncfusion.
+  ///
+  /// Layout (staggered columns merged by Syncfusion):
+  ///   PEND    30,000.00 DB          ← TX1 amount (no date on this row)
+  ///   TGL: 0404 QRC 014 00000.00IDM INDOMA   ← TX1 description
+  ///   TRANSAKSI DEBIT
+  ///   03/04/2026    29,000.00 DB    ← TX1 date  +  TX2 amount (same y!)
+  ///   TGL: 0403 TOKO KOPI ...       ← TX2 description
+  ///   03/04/2026    18,000.00 DB    ← TX2 date  +  TX3 amount
+  ///   …
+  ///   01/04/2026    5,000.00 DB     ← TX(n-1) date  +  TXn amount
+  ///   TXn description
+  ///   01/04/2026                    ← TXn date (date-only, no next amount)
+  ///
+  /// Mapping:
+  ///   TX1  : amount = firstAmount,    date = pairs[0].date
+  ///   TXk  : amount = pairs[k-2].amount, date = pairs[k-1].date  (k ≥ 2)
+  ///   TXlast: amount = pairs[n-2].amount, date = lastDateOnly (or pairs[n-1].date)
+  List<TransactionModel> _parseStaggeredMobileFormat(
+      List<String> lines, String accountId) {
+    final staggeredRe = RegExp(r'^(\d{2})/(\d{2})/(\d{4})\s+(.+)$');
+    final dateOnlyRe = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$');
+
+    double? firstAmount;
+    bool firstIsDebit = true;
+    bool seenPend = false;
+
+    final List<({DateTime date, double amount, bool isDebit})> pairs = [];
+    DateTime? lastDateOnly;
+
+    final List<List<String>> descBlocks = [];
+    var currentDesc = <String>[];
+
+    for (final raw in lines) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+
+      // ── Phase 1: find the PEND line that marks transaction area start ──
+      if (!seenPend) {
+        if (line.startsWith('PEND')) {
+          final m = _bcaAmount.firstMatch(line);
+          if (m != null) {
+            firstAmount = _parseBcaAmount(m.group(1)!);
+            firstIsDebit = line.contains('DB');
+          }
+          seenPend = true;
+        }
+        continue; // skip everything until PEND found
+      }
+
+      // ── Phase 2: processing inside the transaction area ──
+
+      if (_isSkippableLine(line)) continue;
+      if (line == 'PEND' || line == 'SALDO' ||
+          line == 'TANGGAL' || line == 'KETERANGAN') { continue; }
+      if (line == 'Rekening') continue;
+      if (line.startsWith(':')) continue;
+      if (_isTableEnd(line)) break;
+
+      // If firstAmount was not on the PEND line, grab it from the very next
+      // amount-only line before any date-amount pairs appear.
+      if (firstAmount == null) {
+        final m = _bcaAmount.firstMatch(line);
+        if (m != null) {
+          firstAmount = _parseBcaAmount(m.group(1)!);
+          firstIsDebit = line.contains('DB');
+          continue;
+        }
+      }
+
+      // Staggered line: "DD/MM/YYYY    amount DB|CR"
+      final sm = staggeredRe.firstMatch(line);
+      if (sm != null) {
+        final date = DateTime(
+          int.parse(sm.group(3)!),
+          int.parse(sm.group(2)!),
+          int.parse(sm.group(1)!),
+        );
+        final rest = sm.group(4)!;
+        final am = _bcaAmount.firstMatch(rest);
+        if (am != null) {
+          pairs.add((
+            date: date,
+            amount: _parseBcaAmount(am.group(1)!),
+            isDebit: rest.contains('DB'),
+          ));
+          descBlocks.add(List.from(currentDesc));
+          currentDesc = [];
+        } else {
+          // Date present but no following amount → last transaction's date
+          lastDateOnly = date;
+          descBlocks.add(List.from(currentDesc));
+          currentDesc = [];
+        }
+        continue;
+      }
+
+      // Standalone date line (last transaction's date)
+      final dm = dateOnlyRe.firstMatch(line);
+      if (dm != null) {
+        lastDateOnly = DateTime(
+          int.parse(dm.group(3)!),
+          int.parse(dm.group(2)!),
+          int.parse(dm.group(1)!),
+        );
+        descBlocks.add(List.from(currentDesc));
+        currentDesc = [];
+        continue;
+      }
+
+      // Ordinary description line
+      currentDesc.add(line);
+    }
+
+    // Flush any trailing description block
+    if (currentDesc.isNotEmpty) descBlocks.add(List.from(currentDesc));
+
+    debugPrint(
+        '=== Staggered: firstAmount=$firstAmount, ${pairs.length} pairs, ${descBlocks.length} descBlocks ===');
+
+    if (firstAmount == null || pairs.isEmpty) return [];
+
+    final transactions = <TransactionModel>[];
+    final n = pairs.length; // = total transactions − 1
+
+    // TX1
+    {
+      final descLines = descBlocks.isNotEmpty ? descBlocks[0] : <String>[];
+      final desc = _buildMobileDescription(descLines);
+      final type = firstIsDebit ? 'debit' : 'credit';
+      transactions.add(_buildTx(
+        pairs[0].date,
+        firstAmount,
+        type,
+        desc.isNotEmpty ? desc : (firstIsDebit ? 'TRANSAKSI DEBIT' : 'TRSF E-BANKING CR'),
+        descLines.join(' '),
+        accountId,
+      ));
+      debugPrint('STAGGERED TX1: ${pairs[0].date} | $type | $firstAmount | $desc');
+    }
+
+    // TX2 … TX(n+1)
+    for (int k = 1; k <= n; k++) {
+      final pair = pairs[k - 1];
+      final DateTime date;
+      if (k < n) {
+        date = pairs[k].date;
+      } else {
+        // Last transaction: date from standalone date line, or reuse last pair's date
+        date = lastDateOnly ?? pairs[n - 1].date;
+      }
+
+      final descLines = k < descBlocks.length ? descBlocks[k] : <String>[];
+      final desc = _buildMobileDescription(descLines);
+      final type = pair.isDebit ? 'debit' : 'credit';
+
+      if (pair.amount > 0) {
+        transactions.add(_buildTx(
+          date,
+          pair.amount,
+          type,
+          desc.isNotEmpty ? desc : (pair.isDebit ? 'TRANSAKSI DEBIT' : 'TRSF E-BANKING CR'),
+          descLines.join(' '),
+          accountId,
+        ));
+        debugPrint('STAGGERED TX${k + 1}: $date | $type | ${pair.amount} | $desc');
+      }
+    }
+
+    return transactions;
+  }
+
+  /// Build a TransactionModel from parsed fields.
+  TransactionModel _buildTx(
+    DateTime date,
+    double amount,
+    String type,
+    String description,
+    String rawDescription,
+    String accountId,
+  ) {
+    final hash = _generateHash(date, amount, description);
+    return TransactionModel(
+      id: _uuid.v4(),
+      accountId: accountId,
+      amount: amount,
+      description: description,
+      rawDescription: rawDescription,
+      categoryId: '',
+      transactionType: type,
+      transactionDate: date,
+      balanceAfter: 0,
+      importHash: hash,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  // ===== myBCA MOBILE FORMAT DETECTION (column-separated / pdfminer-style) =====
 
   /// Returns true when standalone DD/MM/YYYY lines are found (myBCA mobile export)
   bool _isMobileFormat(List<String> lines) {

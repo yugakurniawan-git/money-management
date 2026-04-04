@@ -59,7 +59,7 @@ class InvestasiScreen extends ConsumerWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Masukkan API Key GoAPI.io di stock_service.dart untuk data saham real-time.\nDaftar gratis di goapi.io',
+                          'Data saham real-time memerlukan Finnhub API key.\nDaftar gratis di finnhub.io, lalu isi di stock_service.dart.',
                           style: TextStyle(
                             color: AppColors.warning,
                             fontSize: 12,
