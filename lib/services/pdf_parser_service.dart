@@ -233,174 +233,150 @@ class PdfParserService {
 
   /// Parse myBCA mobile PDF as extracted by Syncfusion.
   ///
-  /// Layout (staggered columns merged by Syncfusion):
-  ///   PEND    30,000.00 DB          ← TX1 amount (no date on this row)
-  ///   TGL: 0404 QRC 014 00000.00IDM INDOMA   ← TX1 description
-  ///   TRANSAKSI DEBIT
-  ///   03/04/2026    29,000.00 DB    ← TX1 date  +  TX2 amount (same y!)
-  ///   TGL: 0403 TOKO KOPI ...       ← TX2 description
-  ///   03/04/2026    18,000.00 DB    ← TX2 date  +  TX3 amount
-  ///   …
-  ///   01/04/2026    5,000.00 DB     ← TX(n-1) date  +  TXn amount
-  ///   TXn description
-  ///   01/04/2026                    ← TXn date (date-only, no next amount)
+  /// Syncfusion merges all text elements at the same y-coordinate into ONE line.
+  /// Each transaction is a single "main row" followed by one optional type/desc line:
   ///
-  /// Mapping:
-  ///   TX1  : amount = firstAmount,    date = pairs[0].date
-  ///   TXk  : amount = pairs[k-2].amount, date = pairs[k-1].date  (k ≥ 2)
-  ///   TXlast: amount = pairs[n-2].amount, date = lastDateOnly (or pairs[n-1].date)
+  ///   PEND    TGL: 0404 QRC 014 00000.00IDM INDOMA    30,000.00 DB  ← TX1 (all in 1 line)
+  ///   TRANSAKSI DEBIT                                                 ← TX1 type (optional)
+  ///   03/04/2026    TGL: 0403 QR  014 00000.00TOKO KOPI    29,000.00 DB  ← TX2
+  ///   TRANSAKSI DEBIT
+  ///   03/04/2026    0304/FTSCY/WS95271 10000.00HILDA FITRI ANGUL    10,000.00 CR
+  ///   TRSF E-BANKING CR
+  ///   02/04/2026    089506585454    100,000.00 DB
+  ///   TARIKAN ATM 02/04
+  ///
+  /// Each main row contains: date (or PEND) + desc_middle + BCA_amount DB|CR
   List<TransactionModel> _parseStaggeredMobileFormat(
       List<String> lines, String accountId) {
-    final staggeredRe = RegExp(r'^(\d{2})/(\d{2})/(\d{4})\s+(.+)$');
-    final dateOnlyRe = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$');
+    // Detect year from any full date in the lines
+    int year = DateTime.now().year;
+    for (final line in lines) {
+      final m = RegExp(r'\d{2}/\d{2}/(20\d{2})').firstMatch(line);
+      if (m != null) { year = int.parse(m.group(1)!); break; }
+    }
 
-    double? firstAmount;
-    bool firstIsDebit = true;
-    bool seenPend = false;
+    final pendRowRe  = RegExp(r'^PEND\s+(.+)$', caseSensitive: false);
+    final dateRowRe  = RegExp(r'^(\d{2})/(\d{2})/(\d{4})\s+(.+)$');
 
-    final List<({DateTime date, double amount, bool isDebit})> pairs = [];
-    DateTime? lastDateOnly;
+    final transactions = <TransactionModel>[];
+    bool inArea = false;
 
-    final List<List<String>> descBlocks = [];
-    var currentDesc = <String>[];
+    // State for the current "pending" main row (waiting for optional type line)
+    String? pendingRest;       // everything after stripping PEND / date prefix
+    DateTime? pendingDate;     // null means extract from TGL: inside the rest
+
+    // Flush a pending row into a transaction, using [continuation] as extra desc/type
+    void flush(String? continuation) {
+      if (pendingRest == null) return;
+      final rest = pendingRest!;
+
+      // ── Find the LAST BCA amount in rest ──
+      final allAmounts = _bcaAmount.allMatches(rest).toList();
+      if (allAmounts.isEmpty) { pendingRest = null; return; }
+
+      final lastM = allAmounts.last;
+      final amount = _parseBcaAmount(lastM.group(1)!);
+      if (amount <= 0) { pendingRest = null; return; }
+
+      // ── Type: DB/CR marker immediately after the last amount ──
+      final afterAmt = rest.substring(lastM.end).trim();
+      bool isDebit = !afterAmt.startsWith('CR');
+
+      // ── Override type from continuation line keywords ──
+      if (continuation != null) {
+        final up = continuation.toUpperCase();
+        if (up.contains('TRSF E-BANKING CR') || up.contains('KR OTOMATIS') ||
+            up.contains('BUNGA') || up.contains('SETORAN')) {
+          isDebit = false;
+        } else if (up.contains('TRSF E-BANKING DB') || up.contains('TARIKAN ATM') ||
+            up.contains('TRANSAKSI DEBIT') || up.contains('BIAYA ADM')) {
+          isDebit = true;
+        }
+      }
+
+      // ── Description: everything before the last amount ──
+      final descPart = rest.substring(0, lastM.start).trim();
+      final descLines = <String>[if (descPart.isNotEmpty) descPart,
+                                  if (continuation != null) continuation];
+      final desc = _buildMobileDescription(descLines);
+
+      // ── Date: from explicit date or from TGL:/reference in desc ──
+      final date = pendingDate ?? _extractDateFromMergedRow(descPart, year);
+
+      final type    = isDebit ? 'debit' : 'credit';
+      final finalDesc = desc.isNotEmpty ? desc : (isDebit ? 'TRANSAKSI DEBIT' : 'TRSF E-BANKING CR');
+
+      transactions.add(_buildTx(date, amount, type, finalDesc,
+          '$descPart ${continuation ?? ''}', accountId));
+      debugPrint('MERGED TX: $date | $type | $amount | $finalDesc');
+
+      pendingRest = null;
+      pendingDate = null;
+    }
 
     for (final raw in lines) {
       final line = raw.trim();
       if (line.isEmpty) continue;
-
-      // ── Phase 1: find the PEND line that marks transaction area start ──
-      if (!seenPend) {
-        if (line.startsWith('PEND')) {
-          final m = _bcaAmount.firstMatch(line);
-          if (m != null) {
-            firstAmount = _parseBcaAmount(m.group(1)!);
-            firstIsDebit = line.contains('DB');
-          }
-          seenPend = true;
-        }
-        continue; // skip everything until PEND found
-      }
-
-      // ── Phase 2: processing inside the transaction area ──
-
       if (_isSkippableLine(line)) continue;
-      if (line == 'PEND' || line == 'SALDO' ||
-          line == 'TANGGAL' || line == 'KETERANGAN') { continue; }
-      if (line == 'Rekening') continue;
-      if (line.startsWith(':')) continue;
-      if (_isTableEnd(line)) break;
+      if (_isTableEnd(line)) { flush(null); break; }
 
-      // If firstAmount was not on the PEND line, grab it from the very next
-      // amount-only line before any date-amount pairs appear.
-      if (firstAmount == null) {
-        final m = _bcaAmount.firstMatch(line);
-        if (m != null) {
-          firstAmount = _parseBcaAmount(m.group(1)!);
-          firstIsDebit = line.contains('DB');
-          continue;
-        }
-      }
-
-      // Staggered line: "DD/MM/YYYY    amount DB|CR"
-      final sm = staggeredRe.firstMatch(line);
-      if (sm != null) {
-        final date = DateTime(
-          int.parse(sm.group(3)!),
-          int.parse(sm.group(2)!),
-          int.parse(sm.group(1)!),
-        );
-        final rest = sm.group(4)!;
-        final am = _bcaAmount.firstMatch(rest);
-        if (am != null) {
-          pairs.add((
-            date: date,
-            amount: _parseBcaAmount(am.group(1)!),
-            isDebit: rest.contains('DB'),
-          ));
-          descBlocks.add(List.from(currentDesc));
-          currentDesc = [];
-        } else {
-          // Date present but no following amount → last transaction's date
-          lastDateOnly = date;
-          descBlocks.add(List.from(currentDesc));
-          currentDesc = [];
-        }
+      // ── PEND main row: "PEND    desc_middle    amount DB|CR" ──
+      final pendMatch = pendRowRe.firstMatch(line);
+      if (pendMatch != null) {
+        flush(null);
+        pendingRest = pendMatch.group(1)!;
+        pendingDate = null;
+        inArea = true;
         continue;
       }
 
-      // Standalone date line (last transaction's date)
-      final dm = dateOnlyRe.firstMatch(line);
-      if (dm != null) {
-        lastDateOnly = DateTime(
-          int.parse(dm.group(3)!),
-          int.parse(dm.group(2)!),
-          int.parse(dm.group(1)!),
-        );
-        descBlocks.add(List.from(currentDesc));
-        currentDesc = [];
+      // ── Date main row: "DD/MM/YYYY    desc_middle    amount DB|CR" ──
+      final dateMatch = dateRowRe.firstMatch(line);
+      if (dateMatch != null) {
+        flush(null);
+        pendingDate = DateTime(int.parse(dateMatch.group(3)!),
+            int.parse(dateMatch.group(2)!), int.parse(dateMatch.group(1)!));
+        pendingRest = dateMatch.group(4)!;
+        inArea = true;
         continue;
       }
 
-      // Ordinary description line
-      currentDesc.add(line);
-    }
+      if (!inArea) continue;
 
-    // Flush any trailing description block
-    if (currentDesc.isNotEmpty) descBlocks.add(List.from(currentDesc));
-
-    debugPrint(
-        '=== Staggered: firstAmount=$firstAmount, ${pairs.length} pairs, ${descBlocks.length} descBlocks ===');
-
-    if (firstAmount == null || pairs.isEmpty) return [];
-
-    final transactions = <TransactionModel>[];
-    final n = pairs.length; // = total transactions − 1
-
-    // TX1
-    {
-      final descLines = descBlocks.isNotEmpty ? descBlocks[0] : <String>[];
-      final desc = _buildMobileDescription(descLines);
-      final type = firstIsDebit ? 'debit' : 'credit';
-      transactions.add(_buildTx(
-        pairs[0].date,
-        firstAmount,
-        type,
-        desc.isNotEmpty ? desc : (firstIsDebit ? 'TRANSAKSI DEBIT' : 'TRSF E-BANKING CR'),
-        descLines.join(' '),
-        accountId,
-      ));
-      debugPrint('STAGGERED TX1: ${pairs[0].date} | $type | $firstAmount | $desc');
-    }
-
-    // TX2 … TX(n+1)
-    for (int k = 1; k <= n; k++) {
-      final pair = pairs[k - 1];
-      final DateTime date;
-      if (k < n) {
-        date = pairs[k].date;
-      } else {
-        // Last transaction: date from standalone date line, or reuse last pair's date
-        date = lastDateOnly ?? pairs[n - 1].date;
-      }
-
-      final descLines = k < descBlocks.length ? descBlocks[k] : <String>[];
-      final desc = _buildMobileDescription(descLines);
-      final type = pair.isDebit ? 'debit' : 'credit';
-
-      if (pair.amount > 0) {
-        transactions.add(_buildTx(
-          date,
-          pair.amount,
-          type,
-          desc.isNotEmpty ? desc : (pair.isDebit ? 'TRANSAKSI DEBIT' : 'TRSF E-BANKING CR'),
-          descLines.join(' '),
-          accountId,
-        ));
-        debugPrint('STAGGERED TX${k + 1}: $date | $type | ${pair.amount} | $desc');
+      // ── Continuation / type line: flush pending row with this as extra info ──
+      if (pendingRest != null) {
+        flush(line);
       }
     }
 
+    flush(null); // final flush
+    debugPrint('=== Staggered merged: ${transactions.length} transactions ===');
     return transactions;
+  }
+
+  /// Extract date for a PEND row (no explicit date prefix) from the description.
+  /// Looks for "TGL: DDMM" or a reference code "DDMM/..." prefix.
+  DateTime _extractDateFromMergedRow(String descPart, int year) {
+    // "TGL: 0404 ..." → day=04, month=04
+    final tglM = RegExp(r'TGL\s*:\s*(\d{2})(\d{2})', caseSensitive: false)
+        .firstMatch(descPart);
+    if (tglM != null) {
+      final day   = int.tryParse(tglM.group(1)!);
+      final month = int.tryParse(tglM.group(2)!);
+      if (day != null && month != null && day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+        return DateTime(year, month, day);
+      }
+    }
+    // "0404/FTSCY/..." → day=04, month=04
+    final refM = RegExp(r'^(\d{2})(\d{2})/').firstMatch(descPart.trim());
+    if (refM != null) {
+      final day   = int.tryParse(refM.group(1)!);
+      final month = int.tryParse(refM.group(2)!);
+      if (day != null && month != null && day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+        return DateTime(year, month, day);
+      }
+    }
+    return DateTime.now();
   }
 
   /// Build a TransactionModel from parsed fields.
