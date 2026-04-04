@@ -105,10 +105,14 @@ class PdfParserService {
 
     List<TransactionModel> transactions;
 
-    // Detect format — staggered check must come before plain mobile check
-    if (_isStaggeredMobileFormat(lines)) {
-      // Syncfusion merges same-y text: "03/04/2026    29,000.00 DB" on one line
-      debugPrint('=== Detected myBCA STAGGERED MOBILE format (Syncfusion merged) ===');
+    // Detect format — inline check must come first (standalone DB/CR lines)
+    if (_isSyncfusionInlineFormat(lines)) {
+      // Syncfusion extracts each text box separately: amount and DB/CR are on own lines
+      debugPrint('=== Detected myBCA SYNCFUSION INLINE format ===');
+      transactions = _parseSyncfusionInlineFormat(lines, accountId);
+    } else if (_isStaggeredMobileFormat(lines)) {
+      // date+amount merged on same line
+      debugPrint('=== Detected myBCA STAGGERED MOBILE format ===');
       transactions = _parseStaggeredMobileFormat(lines, accountId);
     } else if (_isMobileFormat(lines)) {
       // pdfminer-style: standalone DD/MM/YYYY dates + trailing MUTASI block
@@ -225,6 +229,163 @@ class PdfParserService {
       periode: periode,
       noRekening: noRekening,
     );
+  }
+
+  // ===== myBCA SYNCFUSION INLINE FORMAT =====
+  // Syncfusion extracts each PDF text box as a separate line.
+  // Amount and DB/CR are on their own separate lines.
+  //
+  // Block structure per transaction:
+  //   PEND              ← first TX only (no date yet)
+  //   TGL: 0404 QRC 014 00000.00IDM INDOMA   ← description
+  //   TRANSAKSI DEBIT   ← type
+  //   30,000.00         ← amount (standalone, leading space possible)
+  //   DB                ← debit/credit marker (standalone!)
+  //   03/04/2026        ← date of NEXT transaction (starts next block)
+
+  /// Detect by presence of 2+ standalone "DB" or "CR" lines
+  bool _isSyncfusionInlineFormat(List<String> lines) {
+    int count = 0;
+    for (final line in lines) {
+      final t = line.trim();
+      if (t == 'DB' || t == 'CR') {
+        if (++count >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  List<TransactionModel> _parseSyncfusionInlineFormat(
+      List<String> lines, String accountId) {
+    final dateRe = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$');
+
+    int year = DateTime.now().year;
+    for (final line in lines) {
+      final m = RegExp(r'\d{2}/\d{2}/(20\d{2})').firstMatch(line);
+      if (m != null) { year = int.parse(m.group(1)!); break; }
+    }
+
+    // Group lines into blocks. Each block starts at PEND or DD/MM/YYYY.
+    // Body = all lines until the next date/PEND trigger.
+    final List<({DateTime? date, bool isPend, List<String> body})> blocks = [];
+    var body = <String>[];
+    DateTime? curDate;
+    bool curIsPend = false;
+    bool started = false;
+
+    for (final raw in lines) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+      if (_isSkippableLine(line)) continue;
+      if (line == 'TANGGAL' || line == 'KETERANGAN' ||
+          line == 'MUTASI'  || line == 'SALDO' ||
+          (line == 'PEND' && started)) { continue; }
+      if (line.startsWith(':')) continue;
+      if (line == 'Rekening') continue;
+      if (_isTableEnd(line)) break;
+
+      // PEND = start of transaction area (first TX has no date prefix)
+      if (line == 'PEND' && !started) {
+        started = true;
+        curIsPend = true;
+        curDate = null;
+        body = [];
+        continue;
+      }
+
+      if (!started) continue;
+
+      // DD/MM/YYYY alone = start of next transaction block
+      final dm = dateRe.firstMatch(line);
+      if (dm != null) {
+        if (body.isNotEmpty || curIsPend) {
+          blocks.add((date: curDate, isPend: curIsPend, body: List.from(body)));
+        }
+        curDate = DateTime(int.parse(dm.group(3)!),
+            int.parse(dm.group(2)!), int.parse(dm.group(1)!));
+        curIsPend = false;
+        body = [];
+        continue;
+      }
+
+      body.add(line);
+    }
+    // Flush last block
+    if (body.isNotEmpty || curIsPend) {
+      blocks.add((date: curDate, isPend: curIsPend, body: List.from(body)));
+    }
+
+    debugPrint('=== Inline: ${blocks.length} blocks ===');
+
+    final transactions = <TransactionModel>[];
+
+    for (final block in blocks) {
+      // Find amount and DB/CR from body
+      double amount = 0;
+      bool isDebit = true;
+      bool foundDbCr = false;
+
+      for (final bl in block.body) {
+        final t = bl.trim();
+        if (t == 'DB') { isDebit = true;  foundDbCr = true; continue; }
+        if (t == 'CR') { isDebit = false; foundDbCr = true; continue; }
+        // Standalone amount line (only a BCA amount, optional leading space)
+        final am = _bcaAmount.firstMatch(t);
+        if (am != null) {
+          final rest = t.replaceAll(_bcaAmount, '').trim();
+          if (rest.isEmpty || rest == 'DB' || rest == 'CR') {
+            amount = _parseBcaAmount(am.group(1)!);
+            if (rest == 'DB') { isDebit = true;  foundDbCr = true; }
+            if (rest == 'CR') { isDebit = false; foundDbCr = true; }
+          }
+        }
+      }
+
+      if (amount <= 0) continue;
+
+      // Override isDebit from type keyword if DB/CR marker not found
+      if (!foundDbCr) {
+        final bodyUpper = block.body.join(' ').toUpperCase();
+        if (bodyUpper.contains('TRSF E-BANKING CR') ||
+            bodyUpper.contains('KR OTOMATIS') ||
+            bodyUpper.contains('BUNGA') ||
+            bodyUpper.contains('SETORAN')) {
+          isDebit = false;
+        }
+      }
+
+      // Description = body lines that are NOT standalone amount/DB/CR
+      final descLines = block.body.where((bl) {
+        final t = bl.trim();
+        if (t == 'DB' || t == 'CR') return false;
+        final am = _bcaAmount.firstMatch(t);
+        if (am != null && t.replaceAll(_bcaAmount, '').trim().isEmpty) return false;
+        return true;
+      }).toList();
+
+      final desc = _buildMobileDescription(descLines);
+
+      // Determine date
+      final DateTime date;
+      if (block.date != null) {
+        date = block.date!;
+      } else if (block.isPend) {
+        date = _extractDateFromMergedRow(descLines.join(' '), year);
+      } else {
+        continue;
+      }
+
+      final type = isDebit ? 'debit' : 'credit';
+      final finalDesc = desc.isNotEmpty
+          ? desc
+          : (isDebit ? 'TRANSAKSI DEBIT' : 'TRSF E-BANKING CR');
+
+      transactions.add(_buildTx(
+          date, amount, type, finalDesc, block.body.join(' '), accountId));
+      debugPrint('INLINE TX: $date | $type | $amount | $finalDesc');
+    }
+
+    return transactions;
   }
 
   // ===== myBCA STAGGERED MOBILE FORMAT (Syncfusion output) =====
