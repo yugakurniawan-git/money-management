@@ -39,6 +39,17 @@ class BcaPdfResult {
 class PdfParserService {
   final _uuid = const Uuid();
 
+  /// Stores the last extracted lines for debug reporting
+  List<String> _lastExtractedLines = [];
+
+  /// Returns first N extracted lines for debug display
+  String getDebugLines([int n = 40]) {
+    final preview = _lastExtractedLines.take(n).toList();
+    return preview.asMap().entries
+        .map((e) => '${e.key}: [${e.value}]')
+        .join('\n');
+  }
+
   /// BCA MUTASI/SALDO column format: comma=thousands, dot=decimal
   /// Matches: 6,000.00 | 150,000.00 | 14,129,963.00 | 80,527.71
   /// Does NOT match: 150000.00 | 00000.00 | 089506585454
@@ -79,12 +90,15 @@ class PdfParserService {
     final fullText = allText.join('\n');
     final lines = const LineSplitter().convert(fullText);
 
-    // Debug: print first 50 lines to console
-    debugPrint('=== PDF TEXT EXTRACTION (first 50 lines) ===');
-    for (int i = 0; i < lines.length && i < 50; i++) {
+    // Debug: print first 60 lines to console
+    debugPrint('=== PDF TEXT EXTRACTION (first 60 lines) ===');
+    for (int i = 0; i < lines.length && i < 60; i++) {
       debugPrint('LINE $i: [${lines[i]}]');
     }
     debugPrint('=== TOTAL LINES: ${lines.length} ===');
+
+    // Store raw lines for error reporting
+    _lastExtractedLines = lines;
 
     final year = _detectYear(lines);
     final summary = _parseSummary(lines);

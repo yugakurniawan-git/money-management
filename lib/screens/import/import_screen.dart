@@ -81,6 +81,12 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
         final pdfResult = parser.parseBcaPdf(pdfBytes, accountId);
         transactions = pdfResult.transactions;
         pdfSummary = pdfResult.summary;
+
+        if (transactions.isEmpty) {
+          final debugInfo = parser.getDebugLines(40);
+          setState(() => _error = 'DEBUG - Syncfusion extracted lines:\n$debugInfo');
+          return;
+        }
       } else {
         // Parse CSV
         final String csvContent;
