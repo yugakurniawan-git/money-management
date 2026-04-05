@@ -21,6 +21,7 @@ class ImportScreen extends ConsumerStatefulWidget {
 class _ImportScreenState extends ConsumerState<ImportScreen>
     with SingleTickerProviderStateMixin {
   bool _isLoading = false;
+  String _loadingText = 'Memproses...';
   String? _error;
   late AnimationController _floatController;
 
@@ -42,6 +43,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
   Future<void> _pickAndParseFile() async {
     setState(() {
       _isLoading = true;
+      _loadingText = 'Memproses...';
       _error = null;
     });
 
@@ -79,7 +81,13 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
         debugPrint('=== PDF file loaded: ${pdfBytes.length} bytes ===');
 
         pdfParser = PdfParserService();
-        final pdfResult = await pdfParser.parseBcaPdf(pdfBytes, accountId);
+        final pdfResult = await pdfParser.parseBcaPdf(
+          pdfBytes,
+          accountId,
+          onStatus: (msg) {
+            if (mounted) setState(() => _loadingText = msg);
+          },
+        );
         transactions = pdfResult.transactions;
         pdfSummary = pdfResult.summary;
 
@@ -300,7 +308,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
               StaggeredListItem(
                 index: 5,
                 child: GradientButton(
-                  text: _isLoading ? 'Memproses...' : 'Pilih File CSV / PDF',
+                  text: _isLoading ? _loadingText : 'Pilih File CSV / PDF',
                   isLoading: _isLoading,
                   onPressed: _pickAndParseFile,
                   icon: Icons.file_open,

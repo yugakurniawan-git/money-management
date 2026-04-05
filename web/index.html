@@ -134,30 +134,85 @@
     })();
   </script>
 
-  <!-- PDF.js: robust PDF text extraction (fallback for unsupported font encodings) -->
+  <!-- PDF.js: robust PDF text extraction + OCR for image-based PDFs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
+    var PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // Attempt 1: text-layer extraction via PDF.js
     window.pdfJsExtractText = function(byteData, onSuccess, onError) {
       if (typeof pdfjsLib === 'undefined') { onError('pdfjsLib not loaded'); return; }
-      // byteData may be a Dart List or Uint8Array — normalise to Uint8Array
-      var uint8Array = (byteData instanceof Uint8Array)
-        ? byteData : new Uint8Array(byteData);
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      pdfjsLib.getDocument({ data: uint8Array }).promise
+      var uint8 = (byteData instanceof Uint8Array) ? byteData : new Uint8Array(byteData);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+      pdfjsLib.getDocument({ data: uint8 }).promise
         .then(function(pdf) {
-          var pagePromises = [];
+          var tasks = [];
           for (var i = 1; i <= pdf.numPages; i++) {
-            pagePromises.push(pdf.getPage(i).then(function(page) {
+            tasks.push(pdf.getPage(i).then(function(page) {
               return page.getTextContent().then(function(tc) {
-                return tc.items.map(function(item) { return item.str; }).join('\n');
+                return tc.items.map(function(it) { return it.str; }).join('\n');
               });
             }));
           }
-          return Promise.all(pagePromises);
+          return Promise.all(tasks);
         })
         .then(function(pages) { onSuccess(pages.join('\n')); })
         .catch(function(err) { onError(String(err)); });
+    };
+
+    // Attempt 2: OCR via PDF.js render + Tesseract.js (for image-based / iOS PDFs)
+    window.ocrPdfPages = function(byteData, onSuccess, onError) {
+      if (typeof pdfjsLib === 'undefined') { onError('pdfjsLib not loaded'); return; }
+
+      function runOcr() {
+        var uint8 = (byteData instanceof Uint8Array) ? byteData : new Uint8Array(byteData);
+        pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+
+        Tesseract.createWorker('eng').then(function(ocrWorker) {
+          return pdfjsLib.getDocument({ data: uint8 }).promise.then(function(pdf) {
+            // Process pages sequentially
+            var chain = Promise.resolve([]);
+            for (var p = 1; p <= pdf.numPages; p++) {
+              (function(pageNum) {
+                chain = chain.then(function(texts) {
+                  return pdf.getPage(pageNum).then(function(page) {
+                    var vp = page.getViewport({ scale: 2.0 });
+                    var canvas = document.createElement('canvas');
+                    canvas.width = vp.width;
+                    canvas.height = vp.height;
+                    return page.render({
+                      canvasContext: canvas.getContext('2d'), viewport: vp
+                    }).promise.then(function() {
+                      return ocrWorker.recognize(canvas);
+                    }).then(function(result) {
+                      texts.push(result.data.text);
+                      return texts;
+                    });
+                  });
+                });
+              })(p);
+            }
+            return chain.then(function(texts) {
+              return ocrWorker.terminate().then(function() { return texts; });
+            });
+          });
+        }).then(function(texts) {
+          onSuccess(texts.join('\n'));
+        }).catch(function(err) {
+          onError(String(err));
+        });
+      }
+
+      // Lazy-load Tesseract.js only when needed
+      if (typeof Tesseract !== 'undefined') {
+        runOcr();
+      } else {
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        s.onload = runOcr;
+        s.onerror = function() { onError('Gagal load Tesseract.js'); };
+        document.head.appendChild(s);
+      }
     };
   </script>
 

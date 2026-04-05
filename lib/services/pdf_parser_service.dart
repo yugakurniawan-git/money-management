@@ -64,7 +64,12 @@ class PdfParserService {
   static final RegExp _merchantPrefix = RegExp(r'00000\.00(.+)');
 
   /// Parse BCA bank statement PDF (rekening koran)
-  Future<BcaPdfResult> parseBcaPdf(Uint8List pdfBytes, String accountId) async {
+  /// [onStatus] optional callback for progress updates (e.g. "OCR berjalan...")
+  Future<BcaPdfResult> parseBcaPdf(
+    Uint8List pdfBytes,
+    String accountId, {
+    void Function(String)? onStatus,
+  }) async {
     debugPrint('=== Starting PDF parse, ${pdfBytes.length} bytes ===');
 
     late PdfDocument document;
@@ -113,21 +118,39 @@ class PdfParserService {
 
     document.dispose();
 
-    // Attempt 3: PDF.js (web only) — handles font encodings Syncfusion can't read
+    // Attempt 3: PDF.js text layer (handles some font encodings Syncfusion can't)
     if (lines.where((l) => l.trim().isNotEmpty).isEmpty && kIsWeb) {
       try {
         if (js.context.hasProperty('pdfJsExtractText')) {
           final jsBytesList = js.JsArray.from(pdfBytes);
-          final pdfJsText = await _extractWithPdfJsList(jsBytesList);
-          final realText = pdfJsText.startsWith('PDFJS_DIAG:') ? '' : pdfJsText;
-          debugPrint('=== PDF.js: ${realText.trim().length} chars ===');
-          if (realText.trim().isNotEmpty) {
-            lines = const LineSplitter().convert(realText);
-            fullText = realText;
+          final pdfJsText = await _extractWithPdfJsList(jsBytesList, 'pdfJsExtractText');
+          debugPrint('=== PDF.js text layer: ${pdfJsText.trim().length} chars ===');
+          if (pdfJsText.trim().isNotEmpty) {
+            lines = const LineSplitter().convert(pdfJsText);
+            fullText = pdfJsText;
           }
         }
       } catch (e) {
-        debugPrint('=== PDF.js error: $e ===');
+        debugPrint('=== PDF.js text layer error: $e ===');
+      }
+    }
+
+    // Attempt 4: OCR via Tesseract.js (for image-based PDFs like iOS Mobile BCA)
+    if (lines.where((l) => l.trim().isNotEmpty).isEmpty && kIsWeb) {
+      try {
+        if (js.context.hasProperty('ocrPdfPages')) {
+          onStatus?.call('OCR sedang berjalan...\n(mungkin ~30 detik untuk PDF iOS)');
+          debugPrint('=== Starting OCR fallback ===');
+          final jsBytesList = js.JsArray.from(pdfBytes);
+          final ocrText = await _extractWithPdfJsList(jsBytesList, 'ocrPdfPages');
+          debugPrint('=== OCR result: ${ocrText.trim().length} chars ===');
+          if (ocrText.trim().isNotEmpty) {
+            lines = const LineSplitter().convert(ocrText);
+            fullText = ocrText;
+          }
+        }
+      } catch (e) {
+        debugPrint('=== OCR error: $e ===');
       }
     }
 
@@ -162,15 +185,15 @@ class PdfParserService {
     return BcaPdfResult(transactions: transactions, summary: summary);
   }
 
-  /// Use browser PDF.js to extract text. Accepts a JS array (from js.jsify)
-  Future<String> _extractWithPdfJsList(dynamic jsBytesList) {
+  /// Call a JS function(bytesList, onSuccess, onError) and return result as Future<String>
+  Future<String> _extractWithPdfJsList(dynamic jsBytesList, String jsFnName) {
     final completer = Completer<String>();
     try {
-      js.context.callMethod('pdfJsExtractText', [
+      js.context.callMethod(jsFnName, [
         jsBytesList,
         js.allowInterop((String text) => completer.complete(text)),
         js.allowInterop((String err) =>
-            completer.completeError(Exception('PDF.js: $err'))),
+            completer.completeError(Exception('$jsFnName: $err'))),
       ]);
     } catch (e) {
       completer.completeError(e);
