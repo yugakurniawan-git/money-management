@@ -74,10 +74,9 @@ class PdfParserService {
 
     final allText = <String>[];
     try {
+      final extractor = PdfTextExtractor(document);
       for (int i = 0; i < document.pages.count; i++) {
-        final extractor = PdfTextExtractor(document);
-        final text =
-            extractor.extractText(startPageIndex: i, endPageIndex: i);
+        final text = extractor.extractText(startPageIndex: i, endPageIndex: i);
         allText.add(text);
       }
     } catch (e) {
@@ -85,10 +84,32 @@ class PdfParserService {
       document.dispose();
       throw Exception('Gagal extract teks dari PDF: $e');
     }
-    document.dispose();
 
     final fullText = allText.join('\n');
-    final lines = const LineSplitter().convert(fullText);
+    List<String> lines = const LineSplitter().convert(fullText);
+
+    // Fallback: if extractText() yields no content, try extractTextLines()
+    final nonEmpty = lines.where((l) => l.trim().isNotEmpty).length;
+    if (nonEmpty == 0) {
+      debugPrint('=== extractText() returned empty, trying extractTextLines() fallback ===');
+      try {
+        final extractor2 = PdfTextExtractor(document);
+        final textLines = extractor2.extractTextLines(
+          startPageIndex: 0,
+          endPageIndex: document.pages.count - 1,
+        );
+        if (textLines.isNotEmpty) {
+          lines = textLines.map((tl) => tl.text).toList();
+          debugPrint('=== extractTextLines() returned ${lines.length} lines ===');
+        } else {
+          debugPrint('=== extractTextLines() also returned empty ===');
+        }
+      } catch (e) {
+        debugPrint('=== extractTextLines() error: $e ===');
+      }
+    }
+
+    document.dispose();
 
     // Debug: print first 60 lines to console
     debugPrint('=== PDF TEXT EXTRACTION (first 60 lines) ===');
