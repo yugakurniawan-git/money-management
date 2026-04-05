@@ -339,14 +339,21 @@ class PdfParserService {
     DateTime? curDate;
     bool curIsPend = false;
     bool started = false;
+    // Guard: only allow date-triggered start AFTER the table header row
+    // (TANGGAL/KETERANGAN) to avoid picking up dates from the document header.
+    bool seenTableHeader = false;
 
     for (final raw in lines) {
       final line = raw.trim();
       if (line.isEmpty) continue;
       if (_isSkippableLine(line)) continue;
+      // Track table header appearance
       if (line == 'TANGGAL' || line == 'KETERANGAN' ||
-          line == 'MUTASI'  || line == 'SALDO' ||
-          (line == 'PEND' && started)) { continue; }
+          line == 'MUTASI'  || line == 'SALDO') {
+        seenTableHeader = true;
+        continue;
+      }
+      if (line == 'PEND' && started) { continue; }
       if (line.startsWith(':')) continue;
       if (line == 'Rekening') continue;
       if (_isTableEnd(line)) break;
@@ -360,10 +367,11 @@ class PdfParserService {
         continue;
       }
 
-      // DD/MM/YYYY alone = start of next block, OR starts parsing when no PEND marker
-      // (some myBCA PDF variants start directly with a date line, no PEND)
+      // DD/MM/YYYY alone = start of next block, OR starts parsing when no PEND marker.
+      // Only allow date-triggered start after the table header has been seen,
+      // so header-area dates (e.g. PERIODE) don't prematurely start the parser.
       final dm = dateRe.firstMatch(line);
-      if (dm != null) {
+      if (dm != null && (started || seenTableHeader)) {
         if (started && (body.isNotEmpty || curIsPend)) {
           blocks.add((date: curDate, isPend: curIsPend, body: List.from(body)));
         }
