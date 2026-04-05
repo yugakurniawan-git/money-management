@@ -145,8 +145,9 @@ class PdfParserService {
           final ocrText = await _extractWithPdfJsList(jsBytesList, 'ocrPdfPages');
           debugPrint('=== OCR result: ${ocrText.trim().length} chars ===');
           if (ocrText.trim().isNotEmpty) {
-            lines = const LineSplitter().convert(ocrText);
-            fullText = ocrText;
+            final cleaned = _cleanOcrText(ocrText);
+            lines = const LineSplitter().convert(cleaned);
+            fullText = cleaned;
           }
         }
       } catch (e) {
@@ -351,13 +352,13 @@ class PdfParserService {
     for (final raw in lines) {
       final line = raw.trim();
       if (line.isEmpty) continue;
-      if (_isSkippableLine(line)) continue;
-      // Track table header appearance
+      // Check table header BEFORE _isSkippableLine (which also filters these words)
       if (line == 'TANGGAL' || line == 'KETERANGAN' ||
           line == 'MUTASI'  || line == 'SALDO') {
         seenTableHeader = true;
         continue;
       }
+      if (_isSkippableLine(line)) continue;
       if (line == 'PEND' && started) { continue; }
       if (line.startsWith(':')) continue;
       if (line == 'Rekening') continue;
@@ -992,6 +993,47 @@ class PdfParserService {
     }
 
     return transactions;
+  }
+
+  /// Fix common OCR artifacts in BCA statement text.
+  /// Tesseract often misreads '/' as '7', '1', or 'l' in date fields,
+  /// and confuses ',' and '.' in amounts.
+  String _cleanOcrText(String raw) {
+    final lines = const LineSplitter().convert(raw);
+    final out = <String>[];
+
+    for (final line in lines) {
+      var l = line;
+
+      // Fix date patterns: OCR often garbles DD/MM/YYYY
+      // e.g. "31/0372026" → "31/03/2026", "3l/03/2026" → "31/03/2026"
+      // Pattern: two digits, slash-or-garble, two digits, slash-or-garble, four digits
+      l = l.replaceAllMapped(
+        RegExp(r'(\d{2})[/\\l1|](\d{2})[/\\l1|7](\d{4})'),
+        (m) => '${m[1]}/${m[2]}/${m[3]}',
+      );
+
+      // Fix partial dates at line start: "31/0372..." → try to recover "31/03/2..."
+      l = l.replaceAllMapped(
+        RegExp(r'^(\d{2}/\d{2})7(\d)'),
+        (m) => '${m[1]}/${m[2]}',
+      );
+
+      // Fix common OCR char substitutions in amounts: 'O'→'0', 'l'→'1', 'S'→'5'
+      // Only in number-like sequences (digits + commas + dots)
+      l = l.replaceAllMapped(
+        RegExp(r'(\d+[,.]?\d*)[Ol](\d)'),
+        (m) => '${m[1]}0${m[2]}',
+      );
+
+      // "DB" sometimes OCR'd as "D8" or "D6" or "08"
+      l = l.replaceAll(RegExp(r'\bD[B8b6]\b'), 'DB');
+      // "CR" sometimes OCR'd as "GR" or "C R"
+      l = l.replaceAll(RegExp(r'\b[CG]R\b'), 'CR');
+
+      out.add(l);
+    }
+    return out.join('\n');
   }
 
   /// Lines to always skip — header/metadata content
