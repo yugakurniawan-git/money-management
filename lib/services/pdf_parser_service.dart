@@ -126,11 +126,16 @@ class PdfParserService {
           // Pass bytes as plain JS list to avoid Uint8Array transfer issues
           final jsBytesList = js.JsArray.from(pdfBytes);
           final pdfJsText = await _extractWithPdfJsList(jsBytesList);
-          final n = pdfJsText.trim().length;
-          diagLog.add('pdfjs_chars:$n');
-          if (n > 0) {
-            lines = const LineSplitter().convert(pdfJsText);
-            fullText = pdfJsText;
+          if (pdfJsText.startsWith('PDFJS_DIAG:')) {
+            // Diagnostic-only response (0 real chars) — log it
+            diagLog.add(pdfJsText);
+          } else {
+            final n = pdfJsText.trim().length;
+            diagLog.add('pdfjs_chars:$n');
+            if (n > 0) {
+              lines = const LineSplitter().convert(pdfJsText);
+              fullText = pdfJsText;
+            }
           }
         }
       } catch (e) {
