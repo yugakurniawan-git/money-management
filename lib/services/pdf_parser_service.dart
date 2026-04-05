@@ -175,6 +175,15 @@ class PdfParserService {
 
     if (isInline) {
       transactions = _parseSyncfusionInlineFormat(lines, accountId);
+      // False-positive INLINE detection (e.g. KlikBCA has standalone DB/CR too)
+      // — fall through to structured parser if INLINE found nothing
+      if (transactions.isEmpty) {
+        debugPrint('=== INLINE found 0, falling back to structured parser ===');
+        transactions = _parseTransactions(lines, accountId, year);
+        if (transactions.isEmpty) {
+          transactions = _parseWithRegex(fullText, accountId, year);
+        }
+      }
     } else if (isStagger) {
       transactions = _parseStaggeredMobileFormat(lines, accountId);
     } else if (isMobile) {
@@ -950,8 +959,9 @@ class PdfParserService {
       // After a table end (like Bersambung), skip until next DD/MM date
       // This handles page headers that repeat between pages
 
-      // Check for transaction start: DD/MM followed by text
-      final dateMatch = RegExp(r'^(\d{2}/\d{2})\s+(.+)').firstMatch(line);
+      // Check for transaction start: DD/MM or DD/MM/YYYY followed by text
+      // DD/MM/YYYY appears in OCR output of iOS image-based PDFs
+      final dateMatch = RegExp(r'^(\d{2}/\d{2})(?:/\d{4})?\s+(.+)').firstMatch(line);
       if (dateMatch != null) {
         afterTableEnd = false; // We're back in transaction territory
 
