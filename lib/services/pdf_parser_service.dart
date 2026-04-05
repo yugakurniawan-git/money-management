@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:uuid/uuid.dart';
 import '../models/transaction.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:js' as js;
 
 /// Summary info extracted from BCA bank statement footer
 class BcaPdfSummary {
@@ -61,7 +64,7 @@ class PdfParserService {
   static final RegExp _merchantPrefix = RegExp(r'00000\.00(.+)');
 
   /// Parse BCA bank statement PDF (rekening koran)
-  BcaPdfResult parseBcaPdf(Uint8List pdfBytes, String accountId) {
+  Future<BcaPdfResult> parseBcaPdf(Uint8List pdfBytes, String accountId) async {
     debugPrint('=== Starting PDF parse, ${pdfBytes.length} bytes ===');
 
     late PdfDocument document;
@@ -72,26 +75,25 @@ class PdfParserService {
       throw Exception('Gagal membuka PDF: $e');
     }
 
-    final allText = <String>[];
+    List<String> lines = [];
+    String fullText = '';
+
+    // Try Syncfusion extractText()
     try {
+      final allText = <String>[];
       final extractor = PdfTextExtractor(document);
       for (int i = 0; i < document.pages.count; i++) {
-        final text = extractor.extractText(startPageIndex: i, endPageIndex: i);
-        allText.add(text);
+        allText.add(extractor.extractText(startPageIndex: i, endPageIndex: i));
       }
+      fullText = allText.join('\n');
+      lines = const LineSplitter().convert(fullText);
     } catch (e) {
-      debugPrint('=== PDF TEXT EXTRACTION ERROR: $e ===');
-      document.dispose();
-      throw Exception('Gagal extract teks dari PDF: $e');
+      debugPrint('=== PDF extractText() error: $e ===');
     }
 
-    final fullText = allText.join('\n');
-    List<String> lines = const LineSplitter().convert(fullText);
-
-    // Fallback: if extractText() yields no content, try extractTextLines()
-    final nonEmpty = lines.where((l) => l.trim().isNotEmpty).length;
-    if (nonEmpty == 0) {
-      debugPrint('=== extractText() returned empty, trying extractTextLines() fallback ===');
+    // Fallback 1: extractTextLines()
+    if (lines.where((l) => l.trim().isNotEmpty).isEmpty) {
+      debugPrint('=== extractText() empty, trying extractTextLines() ===');
       try {
         final extractor2 = PdfTextExtractor(document);
         final textLines = extractor2.extractTextLines(
@@ -100,9 +102,8 @@ class PdfParserService {
         );
         if (textLines.isNotEmpty) {
           lines = textLines.map((tl) => tl.text).toList();
-          debugPrint('=== extractTextLines() returned ${lines.length} lines ===');
-        } else {
-          debugPrint('=== extractTextLines() also returned empty ===');
+          fullText = lines.join('\n');
+          debugPrint('=== extractTextLines() got ${lines.length} lines ===');
         }
       } catch (e) {
         debugPrint('=== extractTextLines() error: $e ===');
@@ -111,8 +112,25 @@ class PdfParserService {
 
     document.dispose();
 
+    // Fallback 2: PDF.js (web only) — handles font encodings Syncfusion can't read
+    if (lines.where((l) => l.trim().isNotEmpty).isEmpty && kIsWeb) {
+      debugPrint('=== Syncfusion empty, trying PDF.js fallback ===');
+      try {
+        final pdfJsText = await _extractWithPdfJs(pdfBytes);
+        if (pdfJsText.trim().isNotEmpty) {
+          lines = const LineSplitter().convert(pdfJsText);
+          fullText = pdfJsText;
+          debugPrint('=== PDF.js extracted ${lines.length} lines ===');
+        } else {
+          debugPrint('=== PDF.js also returned empty ===');
+        }
+      } catch (e) {
+        debugPrint('=== PDF.js error: $e ===');
+      }
+    }
+
     // Debug: print first 60 lines to console
-    debugPrint('=== PDF TEXT EXTRACTION (first 60 lines) ===');
+    debugPrint('=== LINES (first 60) ===');
     for (int i = 0; i < lines.length && i < 60; i++) {
       debugPrint('LINE $i: [${lines[i]}]');
     }
@@ -128,24 +146,18 @@ class PdfParserService {
 
     // Detect format — inline check must come first (standalone DB/CR lines)
     if (_isSyncfusionInlineFormat(lines)) {
-      // Syncfusion extracts each text box separately: amount and DB/CR are on own lines
       debugPrint('=== Detected myBCA SYNCFUSION INLINE format ===');
       transactions = _parseSyncfusionInlineFormat(lines, accountId);
     } else if (_isStaggeredMobileFormat(lines)) {
-      // date+amount merged on same line
       debugPrint('=== Detected myBCA STAGGERED MOBILE format ===');
       transactions = _parseStaggeredMobileFormat(lines, accountId);
     } else if (_isMobileFormat(lines)) {
-      // pdfminer-style: standalone DD/MM/YYYY dates + trailing MUTASI block
       debugPrint('=== Detected myBCA MOBILE format (column-separated) ===');
       transactions = _parseMobileFormat(lines, accountId);
     } else {
-      // KlikBCA desktop / structured line-by-line format
       transactions = _parseTransactions(lines, accountId, year);
-
-      // Fallback: regex-based parsing on full text
       if (transactions.isEmpty) {
-        debugPrint('=== Structured parsing found 0 transactions, trying regex fallback ===');
+        debugPrint('=== Structured parsing found 0, trying regex fallback ===');
         transactions = _parseWithRegex(fullText, accountId, year);
       }
     }
@@ -153,6 +165,22 @@ class PdfParserService {
     debugPrint('=== PARSED ${transactions.length} TRANSACTIONS ===');
 
     return BcaPdfResult(transactions: transactions, summary: summary);
+  }
+
+  /// Use browser PDF.js to extract text (handles font encodings Syncfusion can't)
+  Future<String> _extractWithPdfJs(Uint8List bytes) {
+    final completer = Completer<String>();
+    try {
+      js.context.callMethod('pdfJsExtractText', [
+        bytes,
+        js.allowInterop((String text) => completer.complete(text)),
+        js.allowInterop((String err) =>
+            completer.completeError(Exception('PDF.js: $err'))),
+      ]);
+    } catch (e) {
+      completer.completeError(e);
+    }
+    return completer.future;
   }
 
   // ===== YEAR DETECTION =====

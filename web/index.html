@@ -134,6 +134,30 @@
     })();
   </script>
 
+  <!-- PDF.js: robust PDF text extraction (fallback for unsupported font encodings) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    window.pdfJsExtractText = function(uint8Array, onSuccess, onError) {
+      if (typeof pdfjsLib === 'undefined') { onError('PDF.js not loaded'); return; }
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      pdfjsLib.getDocument({ data: uint8Array }).promise
+        .then(function(pdf) {
+          var pagePromises = [];
+          for (var i = 1; i <= pdf.numPages; i++) {
+            pagePromises.push(pdf.getPage(i).then(function(page) {
+              return page.getTextContent().then(function(tc) {
+                return tc.items.map(function(item) { return item.str; }).join('\n');
+              });
+            }));
+          }
+          return Promise.all(pagePromises);
+        })
+        .then(function(pages) { onSuccess(pages.join('\n')); })
+        .catch(function(err) { onError(String(err)); });
+    };
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -79,7 +79,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
         debugPrint('=== PDF file loaded: ${pdfBytes.length} bytes ===');
 
         pdfParser = PdfParserService();
-        final pdfResult = pdfParser.parseBcaPdf(pdfBytes, accountId);
+        final pdfResult = await pdfParser.parseBcaPdf(pdfBytes, accountId);
         transactions = pdfResult.transactions;
         pdfSummary = pdfResult.summary;
 
