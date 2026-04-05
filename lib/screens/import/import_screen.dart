@@ -98,9 +98,12 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
       }
 
       if (transactions.isEmpty) {
-        setState(() => _error = isPdf
-            ? 'Tidak ada transaksi ditemukan di file PDF.\nPastikan ini adalah rekening koran BCA.'
-            : 'Tidak ada transaksi ditemukan di file CSV');
+        if (isPdf) {
+          final debugInfo = parser.getDebugLines(50);
+          setState(() => _error = 'DEBUG lines:\n$debugInfo');
+        } else {
+          setState(() => _error = 'Tidak ada transaksi ditemukan di file CSV');
+        }
         return;
       }
 
