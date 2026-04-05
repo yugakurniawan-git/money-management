@@ -293,20 +293,22 @@ class PdfParserService {
         continue;
       }
 
-      if (!started) continue;
-
-      // DD/MM/YYYY alone = start of next transaction block
+      // DD/MM/YYYY alone = start of next block, OR starts parsing when no PEND marker
+      // (some myBCA PDF variants start directly with a date line, no PEND)
       final dm = dateRe.firstMatch(line);
       if (dm != null) {
-        if (body.isNotEmpty || curIsPend) {
+        if (started && (body.isNotEmpty || curIsPend)) {
           blocks.add((date: curDate, isPend: curIsPend, body: List.from(body)));
         }
+        started = true;
         curDate = DateTime(int.parse(dm.group(3)!),
             int.parse(dm.group(2)!), int.parse(dm.group(1)!));
         curIsPend = false;
         body = [];
         continue;
       }
+
+      if (!started) continue;
 
       body.add(line);
     }
