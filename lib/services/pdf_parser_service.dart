@@ -154,33 +154,38 @@ class PdfParserService {
       }
     }
 
-    // Store for error reporting
-    _lastExtractedLines = lines;
+    final nonEmptyCount = lines.where((l) => l.trim().isNotEmpty).length;
+    final isInline   = _isSyncfusionInlineFormat(lines);
+    final isStagger  = !isInline && _isStaggeredMobileFormat(lines);
+    final isMobile   = !isInline && !isStagger && _isMobileFormat(lines);
+    final formatName = isInline ? 'INLINE' : isStagger ? 'STAGGER' : isMobile ? 'MOBILE' : 'KLIKKBCA';
+
+    // Store diagnostic + first lines for error reporting
+    final diagLines = [
+      'lines:$nonEmptyCount format:$formatName',
+      ...lines.where((l) => l.trim().isNotEmpty).take(30),
+    ];
+    _lastExtractedLines = diagLines;
 
     final year = _detectYear(lines);
     final summary = _parseSummary(lines);
 
     List<TransactionModel> transactions;
 
-    // Detect format — inline check must come first (standalone DB/CR lines)
-    if (_isSyncfusionInlineFormat(lines)) {
-      debugPrint('=== Detected myBCA SYNCFUSION INLINE format ===');
+    if (isInline) {
       transactions = _parseSyncfusionInlineFormat(lines, accountId);
-    } else if (_isStaggeredMobileFormat(lines)) {
-      debugPrint('=== Detected myBCA STAGGERED MOBILE format ===');
+    } else if (isStagger) {
       transactions = _parseStaggeredMobileFormat(lines, accountId);
-    } else if (_isMobileFormat(lines)) {
-      debugPrint('=== Detected myBCA MOBILE format (column-separated) ===');
+    } else if (isMobile) {
       transactions = _parseMobileFormat(lines, accountId);
     } else {
       transactions = _parseTransactions(lines, accountId, year);
       if (transactions.isEmpty) {
-        debugPrint('=== Structured parsing found 0, trying regex fallback ===');
         transactions = _parseWithRegex(fullText, accountId, year);
       }
     }
 
-    debugPrint('=== PARSED ${transactions.length} TRANSACTIONS ===');
+    debugPrint('=== FORMAT:$formatName LINES:$nonEmptyCount TX:${transactions.length} ===');
 
     return BcaPdfResult(transactions: transactions, summary: summary);
   }
