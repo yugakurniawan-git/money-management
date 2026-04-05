@@ -325,16 +325,19 @@ class PdfParserService {
   //   DB                ← debit/credit marker (standalone!)
   //   03/04/2026        ← date of NEXT transaction (starts next block)
 
-  /// Detect by presence of 2+ standalone "DB" or "CR" lines
+  /// Detect myBCA mobile INLINE format.
+  /// Strong signal: standalone PEND marker (always present in myBCA mobile).
+  /// Weak signal: 2+ standalone DB/CR lines (fails for single-transaction PDFs).
   bool _isSyncfusionInlineFormat(List<String> lines) {
-    int count = 0;
+    bool hasPend = false;
+    int dbCrCount = 0;
     for (final line in lines) {
       final t = line.trim();
-      if (t == 'DB' || t == 'CR') {
-        if (++count >= 2) return true;
-      }
+      if (t == 'PEND') hasPend = true;
+      if (t == 'DB' || t == 'CR') dbCrCount++;
     }
-    return false;
+    // PEND alone is definitive; also catch 2+ standalone DB/CR without PEND
+    return hasPend || dbCrCount >= 2;
   }
 
   List<TransactionModel> _parseSyncfusionInlineFormat(
@@ -959,9 +962,10 @@ class PdfParserService {
       // After a table end (like Bersambung), skip until next DD/MM date
       // This handles page headers that repeat between pages
 
-      // Check for transaction start: DD/MM or DD/MM/YYYY followed by text
-      // DD/MM/YYYY appears in OCR output of iOS image-based PDFs
-      final dateMatch = RegExp(r'^(\d{2}/\d{2})(?:/\d{4})?\s+(.+)').firstMatch(line);
+      // Check for transaction start: DD/MM optionally followed by /year-fragment
+      // OCR of iOS PDFs may produce partial years like "31/03/2" or "31/03/20"
+      // because the date column is visually truncated in the PDF
+      final dateMatch = RegExp(r'^(\d{2}/\d{2})(?:/[^\s]*)?\s+(.+)').firstMatch(line);
       if (dateMatch != null) {
         afterTableEnd = false; // We're back in transaction territory
 
