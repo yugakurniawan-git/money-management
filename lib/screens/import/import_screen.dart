@@ -65,6 +65,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
 
       List<dynamic> transactions;
       BcaPdfSummary? pdfSummary;
+      PdfParserService? pdfParser;
 
       if (isPdf) {
         // Parse PDF
@@ -77,8 +78,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
 
         debugPrint('=== PDF file loaded: ${pdfBytes.length} bytes ===');
 
-        final parser = PdfParserService();
-        final pdfResult = parser.parseBcaPdf(pdfBytes, accountId);
+        pdfParser = PdfParserService();
+        final pdfResult = pdfParser.parseBcaPdf(pdfBytes, accountId);
         transactions = pdfResult.transactions;
         pdfSummary = pdfResult.summary;
 
@@ -98,8 +99,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
       }
 
       if (transactions.isEmpty) {
-        if (isPdf) {
-          final debugInfo = parser.getDebugLines(50);
+        if (isPdf && pdfParser != null) {
+          final debugInfo = pdfParser.getDebugLines(50);
           setState(() => _error = 'DEBUG lines:\n$debugInfo');
         } else {
           setState(() => _error = 'Tidak ada transaksi ditemukan di file CSV');
