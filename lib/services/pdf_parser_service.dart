@@ -82,6 +82,7 @@ class PdfParserService {
 
     List<String> lines = [];
     String fullText = '';
+    bool isOcrText = false;
 
     // Attempt 1: Syncfusion extractText()
     try {
@@ -148,6 +149,7 @@ class PdfParserService {
             final cleaned = _cleanOcrText(ocrText);
             lines = const LineSplitter().convert(cleaned);
             fullText = cleaned;
+            isOcrText = true;
           }
         }
       } catch (e) {
@@ -192,6 +194,14 @@ class PdfParserService {
       transactions = _parseTransactions(lines, accountId, year);
       if (transactions.isEmpty) {
         transactions = _parseWithRegex(fullText, accountId, year);
+      }
+      // OCR text: Tesseract often merges rows → use full-text amount scan
+      if (isOcrText) {
+        final ocrTx = _parseOcrFullText(fullText, accountId, year);
+        // Use OCR result if it found more transactions
+        if (ocrTx.length > transactions.length) {
+          transactions = ocrTx;
+        }
       }
     }
 
@@ -1033,8 +1043,18 @@ class PdfParserService {
         (m) => '${m[1]}/${m[2]}',
       );
 
-      // Fix common OCR char substitutions in amounts: 'O'→'0', 'l'→'1', 'S'→'5'
-      // Only in number-like sequences (digits + commas + dots)
+      // Fix OCR period-as-thousands-separator in amounts:
+      // "1.234.567.89" → "1,234,567.89", "10.740.00" → "10,740.00"
+      l = l.replaceAllMapped(
+        RegExp(r'\b(\d{1,3})\.(\d{3})\.(\d{3})\.(\d{2})\b'),
+        (m) => '${m[1]},${m[2]},${m[3]}.${m[4]}',
+      );
+      l = l.replaceAllMapped(
+        RegExp(r'\b(\d{1,3})\.(\d{3})\.(\d{2})\b'),
+        (m) => '${m[1]},${m[2]}.${m[3]}',
+      );
+
+      // Fix common OCR char substitutions in amounts: 'O'→'0', 'l'→'1'
       l = l.replaceAllMapped(
         RegExp(r'(\d+[,.]?\d*)[Ol](\d)'),
         (m) => '${m[1]}0${m[2]}',
@@ -1307,6 +1327,75 @@ class PdfParserService {
     result = result.replaceAll(RegExp(r'\s+\d{1,3}$'), '').trim();
 
     return result;
+  }
+
+  // ===== OCR FULL-TEXT PARSER =====
+
+  /// Parse OCR output where Tesseract has merged table rows into long lines.
+  /// Strategy: scan the full text for all "BCA_amount DB|CR" occurrences,
+  /// then find the nearest DD/MM date before each one.
+  List<TransactionModel> _parseOcrFullText(
+      String fullText, String accountId, int year) {
+    // Collect all DD/MM positions (skip false positives like "1/5" page numbers)
+    final dateRe = RegExp(r'(\d{2})/(\d{2})');
+    final datePositions = <({int pos, int day, int month})>[];
+    for (final m in dateRe.allMatches(fullText)) {
+      final d = int.tryParse(m.group(1)!) ?? 0;
+      final mo = int.tryParse(m.group(2)!) ?? 0;
+      if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) {
+        datePositions.add((pos: m.start, day: d, month: mo));
+      }
+    }
+    if (datePositions.isEmpty) return [];
+
+    // Find all "amount DB|CR" occurrences
+    final txRe = RegExp(
+      r'(\d{1,3}(?:,\d{3})+\.\d{2})\s+(DB|CR)\b',
+      caseSensitive: false,
+    );
+
+    final transactions = <TransactionModel>[];
+    final seen = <String>{};
+
+    for (final m in txRe.allMatches(fullText)) {
+      final amountStr = m.group(1)!;
+      final isDebit = m.group(2)!.toUpperCase() == 'DB';
+      final amount = _parseBcaAmount(amountStr);
+      if (amount <= 0) continue;
+
+      // Find closest date before this amount
+      ({int pos, int day, int month})? closest;
+      for (final dp in datePositions) {
+        if (dp.pos < m.start) closest = dp;
+      }
+      if (closest == null) continue;
+
+      final date = DateTime(year, closest.month, closest.day);
+      final type = isDebit ? 'debit' : 'credit';
+
+      // Description: text between the date and the amount
+      final raw = fullText.substring(closest.pos, m.start).trim();
+      // Strip the date prefix (DD/MM and optional /year-fragment)
+      final desc = raw
+          .replaceFirst(RegExp(r'^\d{2}/\d{2}(?:/[^\s]*)?\s*'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      final finalDesc = desc.isNotEmpty
+          ? desc
+          : (isDebit ? 'TRANSAKSI DEBIT' : 'TRSF E-BANKING CR');
+
+      // De-duplicate: same date+amount+type only once
+      final key = '${date.toIso8601String()}|$amount|$type';
+      if (seen.contains(key)) continue;
+      seen.add(key);
+
+      transactions.add(_buildTx(
+          date, amount, type, finalDesc, raw, accountId));
+      debugPrint('OCR TX: $date | $type | $amount | $finalDesc');
+    }
+
+    debugPrint('=== OCR full-text: ${transactions.length} transactions ===');
+    return transactions;
   }
 
   // ===== REGEX FALLBACK =====
