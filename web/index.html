@@ -137,8 +137,11 @@
   <!-- PDF.js: robust PDF text extraction (fallback for unsupported font encodings) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
-    window.pdfJsExtractText = function(uint8Array, onSuccess, onError) {
-      if (typeof pdfjsLib === 'undefined') { onError('PDF.js not loaded'); return; }
+    window.pdfJsExtractText = function(byteData, onSuccess, onError) {
+      if (typeof pdfjsLib === 'undefined') { onError('pdfjsLib not loaded'); return; }
+      // byteData may be a Dart List or Uint8Array — normalise to Uint8Array
+      var uint8Array = (byteData instanceof Uint8Array)
+        ? byteData : new Uint8Array(byteData);
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       pdfjsLib.getDocument({ data: uint8Array }).promise

@@ -77,6 +77,8 @@ class PdfParserService {
 
     List<String> lines = [];
     String fullText = '';
+    final diagLog = <String>[];
+    diagLog.add('size:${pdfBytes.length}b pages:${document.pages.count}');
 
     // Try Syncfusion extractText()
     try {
@@ -87,57 +89,66 @@ class PdfParserService {
       }
       fullText = allText.join('\n');
       lines = const LineSplitter().convert(fullText);
+      final n = lines.where((l) => l.trim().isNotEmpty).length;
+      diagLog.add('syncfusion_extract:${n}nonempty');
     } catch (e) {
-      debugPrint('=== PDF extractText() error: $e ===');
+      diagLog.add('syncfusion_err:$e');
     }
 
     // Fallback 1: extractTextLines()
     if (lines.where((l) => l.trim().isNotEmpty).isEmpty) {
-      debugPrint('=== extractText() empty, trying extractTextLines() ===');
       try {
         final extractor2 = PdfTextExtractor(document);
         final textLines = extractor2.extractTextLines(
           startPageIndex: 0,
           endPageIndex: document.pages.count - 1,
         );
-        if (textLines.isNotEmpty) {
+        final n = textLines.where((tl) => tl.text.trim().isNotEmpty).length;
+        diagLog.add('textlines:${n}nonempty');
+        if (n > 0) {
           lines = textLines.map((tl) => tl.text).toList();
           fullText = lines.join('\n');
-          debugPrint('=== extractTextLines() got ${lines.length} lines ===');
         }
       } catch (e) {
-        debugPrint('=== extractTextLines() error: $e ===');
+        diagLog.add('textlines_err:$e');
       }
     }
 
     document.dispose();
 
-    // Fallback 2: PDF.js (web only) — handles font encodings Syncfusion can't read
+    // Fallback 2: PDF.js (web only)
     if (lines.where((l) => l.trim().isNotEmpty).isEmpty && kIsWeb) {
-      debugPrint('=== Syncfusion empty, trying PDF.js fallback ===');
       try {
-        final pdfJsText = await _extractWithPdfJs(pdfBytes);
-        if (pdfJsText.trim().isNotEmpty) {
-          lines = const LineSplitter().convert(pdfJsText);
-          fullText = pdfJsText;
-          debugPrint('=== PDF.js extracted ${lines.length} lines ===');
-        } else {
-          debugPrint('=== PDF.js also returned empty ===');
+        // Check if PDF.js function exists first
+        final hasPdfJs = js.context.hasProperty('pdfJsExtractText');
+        diagLog.add('pdfjs_fn_exists:$hasPdfJs');
+        if (hasPdfJs) {
+          // Pass bytes as plain JS list to avoid Uint8Array transfer issues
+          final jsBytesList = js.JsArray.from(pdfBytes);
+          final pdfJsText = await _extractWithPdfJsList(jsBytesList);
+          final n = pdfJsText.trim().length;
+          diagLog.add('pdfjs_chars:$n');
+          if (n > 0) {
+            lines = const LineSplitter().convert(pdfJsText);
+            fullText = pdfJsText;
+          }
         }
       } catch (e) {
-        debugPrint('=== PDF.js error: $e ===');
+        diagLog.add('pdfjs_err:$e');
       }
     }
 
     // Debug: print first 60 lines to console
-    debugPrint('=== LINES (first 60) ===');
+    debugPrint('=== DIAG: ${diagLog.join(' | ')} ===');
     for (int i = 0; i < lines.length && i < 60; i++) {
       debugPrint('LINE $i: [${lines[i]}]');
     }
-    debugPrint('=== TOTAL LINES: ${lines.length} ===');
 
-    // Store raw lines for error reporting
-    _lastExtractedLines = lines;
+    // Store diagnostic + lines for error reporting
+    _lastExtractedLines = [
+      ...diagLog,
+      ...lines.take(47),
+    ];
 
     final year = _detectYear(lines);
     final summary = _parseSummary(lines);
@@ -167,12 +178,12 @@ class PdfParserService {
     return BcaPdfResult(transactions: transactions, summary: summary);
   }
 
-  /// Use browser PDF.js to extract text (handles font encodings Syncfusion can't)
-  Future<String> _extractWithPdfJs(Uint8List bytes) {
+  /// Use browser PDF.js to extract text. Accepts a JS array (from js.jsify)
+  Future<String> _extractWithPdfJsList(dynamic jsBytesList) {
     final completer = Completer<String>();
     try {
       js.context.callMethod('pdfJsExtractText', [
-        bytes,
+        jsBytesList,
         js.allowInterop((String text) => completer.complete(text)),
         js.allowInterop((String err) =>
             completer.completeError(Exception('PDF.js: $err'))),
