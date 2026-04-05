@@ -1,0 +1,13 @@
+# Flutter PWA - Prevent caching of service worker & version files
+# so all devices always get the latest build
+
+<FilesMatch "(flutter_service_worker\.js|version\.json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</FilesMatch>
+
+# Allow main.dart.js and other assets to be cached normally by Flutter SW
+<FilesMatch "\.(js|css|png|jpg|jpeg|gif|ico|wasm|json)$">
+    Header set Access-Control-Allow-Origin "*"
+</FilesMatch>
