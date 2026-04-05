@@ -150,26 +150,13 @@
           for (var i = 1; i <= pdf.numPages; i++) {
             pagePromises.push(pdf.getPage(i).then(function(page) {
               return page.getTextContent().then(function(tc) {
-                return {
-                  text: tc.items.map(function(item) { return item.str; }).join('\n'),
-                  itemCount: tc.items.length
-                };
+                return tc.items.map(function(item) { return item.str; }).join('\n');
               });
             }));
           }
           return Promise.all(pagePromises);
         })
-        .then(function(results) {
-          // results = array of {text, itemCount} per page
-          var totalItems = results.reduce(function(s,r){ return s + r.itemCount; }, 0);
-          var combined = results.map(function(r){ return r.text; }).join('\n');
-          // Prefix with diagnostic if text is empty
-          if (combined.trim().length === 0) {
-            onSuccess('PDFJS_DIAG:items=' + totalItems + ',chars=0');
-          } else {
-            onSuccess(combined);
-          }
-        })
+        .then(function(pages) { onSuccess(pages.join('\n')); })
         .catch(function(err) { onError(String(err)); });
     };
   </script>

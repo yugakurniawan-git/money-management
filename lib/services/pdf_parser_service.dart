@@ -77,10 +77,8 @@ class PdfParserService {
 
     List<String> lines = [];
     String fullText = '';
-    final diagLog = <String>[];
-    diagLog.add('size:${pdfBytes.length}b pages:${document.pages.count}');
 
-    // Try Syncfusion extractText()
+    // Attempt 1: Syncfusion extractText()
     try {
       final allText = <String>[];
       final extractor = PdfTextExtractor(document);
@@ -89,13 +87,12 @@ class PdfParserService {
       }
       fullText = allText.join('\n');
       lines = const LineSplitter().convert(fullText);
-      final n = lines.where((l) => l.trim().isNotEmpty).length;
-      diagLog.add('syncfusion_extract:${n}nonempty');
+      debugPrint('=== Syncfusion extractText: ${lines.where((l) => l.trim().isNotEmpty).length} non-empty lines ===');
     } catch (e) {
-      diagLog.add('syncfusion_err:$e');
+      debugPrint('=== Syncfusion extractText error: $e ===');
     }
 
-    // Fallback 1: extractTextLines()
+    // Attempt 2: extractTextLines()
     if (lines.where((l) => l.trim().isNotEmpty).isEmpty) {
       try {
         final extractor2 = PdfTextExtractor(document);
@@ -103,57 +100,39 @@ class PdfParserService {
           startPageIndex: 0,
           endPageIndex: document.pages.count - 1,
         );
-        final n = textLines.where((tl) => tl.text.trim().isNotEmpty).length;
-        diagLog.add('textlines:${n}nonempty');
-        if (n > 0) {
+        final nonEmpty = textLines.where((tl) => tl.text.trim().isNotEmpty);
+        debugPrint('=== extractTextLines: ${nonEmpty.length} non-empty ===');
+        if (nonEmpty.isNotEmpty) {
           lines = textLines.map((tl) => tl.text).toList();
           fullText = lines.join('\n');
         }
       } catch (e) {
-        diagLog.add('textlines_err:$e');
+        debugPrint('=== extractTextLines error: $e ===');
       }
     }
 
     document.dispose();
 
-    // Fallback 2: PDF.js (web only)
+    // Attempt 3: PDF.js (web only) — handles font encodings Syncfusion can't read
     if (lines.where((l) => l.trim().isNotEmpty).isEmpty && kIsWeb) {
       try {
-        // Check if PDF.js function exists first
-        final hasPdfJs = js.context.hasProperty('pdfJsExtractText');
-        diagLog.add('pdfjs_fn_exists:$hasPdfJs');
-        if (hasPdfJs) {
-          // Pass bytes as plain JS list to avoid Uint8Array transfer issues
+        if (js.context.hasProperty('pdfJsExtractText')) {
           final jsBytesList = js.JsArray.from(pdfBytes);
           final pdfJsText = await _extractWithPdfJsList(jsBytesList);
-          if (pdfJsText.startsWith('PDFJS_DIAG:')) {
-            // Diagnostic-only response (0 real chars) — log it
-            diagLog.add(pdfJsText);
-          } else {
-            final n = pdfJsText.trim().length;
-            diagLog.add('pdfjs_chars:$n');
-            if (n > 0) {
-              lines = const LineSplitter().convert(pdfJsText);
-              fullText = pdfJsText;
-            }
+          final realText = pdfJsText.startsWith('PDFJS_DIAG:') ? '' : pdfJsText;
+          debugPrint('=== PDF.js: ${realText.trim().length} chars ===');
+          if (realText.trim().isNotEmpty) {
+            lines = const LineSplitter().convert(realText);
+            fullText = realText;
           }
         }
       } catch (e) {
-        diagLog.add('pdfjs_err:$e');
+        debugPrint('=== PDF.js error: $e ===');
       }
     }
 
-    // Debug: print first 60 lines to console
-    debugPrint('=== DIAG: ${diagLog.join(' | ')} ===');
-    for (int i = 0; i < lines.length && i < 60; i++) {
-      debugPrint('LINE $i: [${lines[i]}]');
-    }
-
-    // Store diagnostic + lines for error reporting
-    _lastExtractedLines = [
-      ...diagLog,
-      ...lines.take(47),
-    ];
+    // Store for error reporting
+    _lastExtractedLines = lines;
 
     final year = _detectYear(lines);
     final summary = _parseSummary(lines);

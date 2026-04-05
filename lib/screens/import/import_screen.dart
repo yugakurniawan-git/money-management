@@ -99,12 +99,13 @@ class _ImportScreenState extends ConsumerState<ImportScreen>
       }
 
       if (transactions.isEmpty) {
-        if (isPdf && pdfParser != null) {
-          final debugInfo = pdfParser.getDebugLines(50);
-          setState(() => _error = 'DEBUG lines:\n$debugInfo');
-        } else {
-          setState(() => _error = 'Tidak ada transaksi ditemukan di file CSV');
-        }
+        setState(() => _error = isPdf
+            ? 'Tidak ada transaksi ditemukan di file PDF.\n\n'
+              'Jika PDF dari iPhone (iOS Mobile BCA), teks tidak bisa dibaca '
+              'karena iOS menyimpan PDF sebagai gambar.\n\n'
+              '✓ Solusi: gunakan ekspor CSV dari Mobile BCA, '
+              'atau download PDF lewat KlikBCA di browser komputer.'
+            : 'Tidak ada transaksi ditemukan di file CSV.');
         return;
       }
 
