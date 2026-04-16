@@ -20,6 +20,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Create .env
+        run: echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
+
       - name: Build Flutter Web
         run: flutter build web --release --base-href /
 
