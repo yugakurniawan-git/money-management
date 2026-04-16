@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/transaction_item.dart';
@@ -17,7 +16,6 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   final ImagePicker _picker = ImagePicker();
   
   bool _isLoading = false;
-  File? _imageFile;
   List<TransactionItem>? _scannedItems;
 
   Future<void> _takePhoto() async {
@@ -28,13 +26,12 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
 
     if (image != null) {
       setState(() {
-        _imageFile = File(image.path);
         _isLoading = true;
         _scannedItems = null;
       });
 
       try {
-        final bytes = await _imageFile!.readAsBytes();
+        final bytes = await image.readAsBytes();
         final base64Image = base64Encode(bytes);
         
         final items = await _aiService.scanReceiptItems(base64Image);
