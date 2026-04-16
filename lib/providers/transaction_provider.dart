@@ -30,6 +30,7 @@ final totalBalanceProvider = Provider<_TotalBalance>((ref) {
   double income = 0;
   double expense = 0;
   for (final txn in transactions) {
+    if (txn.transactionType == 'transfer') continue;
     if (txn.isIncome) {
       income += txn.amount;
     } else {
@@ -59,6 +60,7 @@ final monthlySummaryProvider =
   double totalExpense = 0;
 
   for (final txn in monthTransactions) {
+    if (txn.transactionType == 'transfer') continue;
     if (txn.isIncome) {
       totalIncome += txn.amount;
     } else {
@@ -96,7 +98,7 @@ final categoryBreakdownProvider =
   final transactions = ref.watch(transactionsProvider).value ?? [];
 
   final expenses = transactions.where((txn) =>
-      txn.isExpense &&
+      txn.transactionType == 'debit' &&
       txn.transactionDate.year == month.year &&
       txn.transactionDate.month == month.month);
 

@@ -5,6 +5,7 @@ class AccountModel {
   final String bankName;
   final String accountNumber;
   final String ownerName;
+  final String accountType; // 'bank', 'cash', 'ewallet'
   final double balance;
   final DateTime balanceUpdatedAt;
 
@@ -13,6 +14,7 @@ class AccountModel {
     required this.bankName,
     required this.accountNumber,
     required this.ownerName,
+    this.accountType = 'bank',
     this.balance = 0,
     required this.balanceUpdatedAt,
   });
@@ -24,6 +26,7 @@ class AccountModel {
       bankName: data['bankName'] ?? 'BCA',
       accountNumber: data['accountNumber'] ?? '',
       ownerName: data['ownerName'] ?? '',
+      accountType: data['accountType'] ?? 'bank',
       balance: (data['balance'] ?? 0).toDouble(),
       balanceUpdatedAt:
           (data['balanceUpdatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -35,6 +38,7 @@ class AccountModel {
       'bankName': bankName,
       'accountNumber': accountNumber,
       'ownerName': ownerName,
+      'accountType': accountType,
       'balance': balance,
       'balanceUpdatedAt': Timestamp.fromDate(balanceUpdatedAt),
     };

@@ -19,6 +19,7 @@ import '../../widgets/common/staggered_list_animation.dart';
 import '../insights/insights_screen.dart';
 import '../report/report_screen.dart';
 import '../goals/goals_screen.dart';
+import '../receipt_scanner_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -48,6 +49,19 @@ class DashboardScreen extends ConsumerWidget {
     final healthScore = ref.watch(healthScoreProvider);
     final goals = ref.watch(goalsProvider).value ?? [];
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ReceiptScannerScreen(),
+            ),
+          );
+        },
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.camera_alt, color: Colors.white),
+        label: const Text('Scan Struk', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
       body: transactions.when(
         loading: () => const _DashboardEmpty(),
         error: (err, _) => const _DashboardEmpty(),

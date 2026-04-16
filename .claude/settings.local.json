@@ -33,7 +33,20 @@
       "Bash(git init:*)",
       "Bash(git config:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git remote:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(/Users/yugakurniawan/development/flutter/bin/flutter analyze:*)",
+      "Bash(strings '/Users/yugakurniawan/Downloads/MutasiBCA_010426-040426 \\(3\\).pdf')",
+      "Bash(pip3 install:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(/Users/yugakurniawan/fvm/default/bin/flutter analyze:*)",
+      "Read(//Users/yugakurniawan/**)",
+      "Bash(/Users/yugakurniawan/development/flutter/bin/flutter build:*)",
+      "Bash(find /Users/yugakurniawan/VSC/money-management -name *.env -o -name .env* -o -name deploy* -o -name ftp*)",
+      "Bash(gh run:*)",
+      "Bash($HOME/fvm/default/bin/flutter analyze:*)"
     ]
   }
 }

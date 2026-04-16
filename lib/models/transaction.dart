@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'transaction_item.dart';
 
 class TransactionModel {
   final String id;
@@ -7,7 +8,9 @@ class TransactionModel {
   final String description;
   final String rawDescription;
   final String categoryId;
-  final String transactionType; // "credit" or "debit"
+  final String transactionType; // "credit", "debit", or "transfer"
+  final String? toAccountId;
+  final List<TransactionItem>? items;
   final DateTime transactionDate;
   final double balanceAfter;
   final String note;
@@ -22,6 +25,8 @@ class TransactionModel {
     required this.rawDescription,
     required this.categoryId,
     required this.transactionType,
+    this.toAccountId,
+    this.items,
     required this.transactionDate,
     required this.balanceAfter,
     this.note = '',
@@ -39,6 +44,10 @@ class TransactionModel {
       rawDescription: data['rawDescription'] ?? '',
       categoryId: data['categoryId'] ?? '',
       transactionType: data['transactionType'] ?? 'debit',
+      toAccountId: data['toAccountId'],
+      items: data['items'] != null
+          ? (data['items'] as List).map((i) => TransactionItem.fromMap(i as Map<String, dynamic>)).toList()
+          : null,
       transactionDate: (data['transactionDate'] as Timestamp).toDate(),
       balanceAfter: (data['balanceAfter'] ?? 0).toDouble(),
       note: data['note'] ?? '',
@@ -55,6 +64,8 @@ class TransactionModel {
       'rawDescription': rawDescription,
       'categoryId': categoryId,
       'transactionType': transactionType,
+      if (toAccountId != null) 'toAccountId': toAccountId,
+      if (items != null) 'items': items!.map((i) => i.toMap()).toList(),
       'transactionDate': Timestamp.fromDate(transactionDate),
       'balanceAfter': balanceAfter,
       'note': note,
@@ -71,6 +82,8 @@ class TransactionModel {
     String? rawDescription,
     String? categoryId,
     String? transactionType,
+    String? toAccountId,
+    List<TransactionItem>? items,
     DateTime? transactionDate,
     double? balanceAfter,
     String? note,
@@ -85,6 +98,8 @@ class TransactionModel {
       rawDescription: rawDescription ?? this.rawDescription,
       categoryId: categoryId ?? this.categoryId,
       transactionType: transactionType ?? this.transactionType,
+      toAccountId: toAccountId ?? this.toAccountId,
+      items: items ?? this.items,
       transactionDate: transactionDate ?? this.transactionDate,
       balanceAfter: balanceAfter ?? this.balanceAfter,
       note: note ?? this.note,
@@ -95,4 +110,5 @@ class TransactionModel {
 
   bool get isExpense => transactionType == 'debit';
   bool get isIncome => transactionType == 'credit';
+  bool get isTransfer => transactionType == 'transfer';
 }
