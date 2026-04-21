@@ -11,6 +11,49 @@ import '../../widgets/common/glass_container.dart';
 
 final _idr = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+/// Parse berbagai format angka BCA / umum:
+/// "52,853.71" → 52853.71   (koma=ribuan, titik=desimal)
+/// "52.853,71" → 52853.71   (titik=ribuan, koma=desimal)
+/// "52.853"    → 52853.0    (titik=ribuan)
+/// "52853.71"  → 52853.71   (titik=desimal)
+/// "500000"    → 500000.0
+double _parseCurrency(String raw) {
+  raw = raw.trim().replaceAll(' ', '');
+  if (raw.isEmpty) return 0;
+
+  final hasComma = raw.contains(',');
+  final hasDot = raw.contains('.');
+
+  if (hasComma && hasDot) {
+    // Separator terakhir = desimal
+    final lastComma = raw.lastIndexOf(',');
+    final lastDot = raw.lastIndexOf('.');
+    if (lastDot > lastComma) {
+      // Format BCA: 52,853.71
+      return double.tryParse(raw.replaceAll(',', '')) ?? 0;
+    } else {
+      // Format ID: 52.853,71
+      return double.tryParse(raw.replaceAll('.', '').replaceAll(',', '.')) ?? 0;
+    }
+  }
+
+  if (hasComma && !hasDot) {
+    final afterComma = raw.split(',').last;
+    return afterComma.length == 2
+        ? double.tryParse(raw.replaceAll(',', '.')) ?? 0   // 52853,71
+        : double.tryParse(raw.replaceAll(',', '')) ?? 0;   // 52,853
+  }
+
+  if (hasDot && !hasComma) {
+    final afterDot = raw.split('.').last;
+    return afterDot.length == 3
+        ? double.tryParse(raw.replaceAll('.', '')) ?? 0    // 52.853
+        : double.tryParse(raw) ?? 0;                       // 52853.71
+  }
+
+  return double.tryParse(raw) ?? 0;
+}
+
 class WalletScreen extends ConsumerWidget {
   const WalletScreen({super.key});
 
@@ -117,7 +160,7 @@ class WalletScreen extends ConsumerWidget {
               TextField(
                 controller: amountController,
                 decoration: const InputDecoration(labelText: 'Jumlah tarik (Rp)', hintText: '500000'),
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
             ],
           ),
@@ -125,8 +168,8 @@ class WalletScreen extends ConsumerWidget {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
             TextButton(
               onPressed: () async {
-                final amount = double.tryParse(amountController.text.replaceAll('.', '').replaceAll(',', ''));
-                if (amount == null || amount <= 0) return;
+                final amount = _parseCurrency(amountController.text);
+                if (amount <= 0) return;
 
                 Navigator.pop(ctx);
 
@@ -224,13 +267,13 @@ class WalletScreen extends ConsumerWidget {
               TextField(
                 controller: numberController,
                 decoration: const InputDecoration(labelText: 'Nomor rekening (opsional)'),
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: balanceController,
                 decoration: const InputDecoration(labelText: 'Saldo awal (Rp)'),
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
             ],
           ),
@@ -239,7 +282,7 @@ class WalletScreen extends ConsumerWidget {
             TextButton(
               onPressed: () async {
                 if (nameController.text.isEmpty) return;
-                final balance = double.tryParse(balanceController.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+                final balance = _parseCurrency(balanceController.text);
                 await FirebaseService().addAccount(AccountModel(
                   id: const Uuid().v4(),
                   bankName: nameController.text,
@@ -317,15 +360,15 @@ class _AccountCard extends ConsumerWidget {
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(labelText: 'Saldo saat ini (Rp)'),
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           autofocus: true,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
           TextButton(
             onPressed: () async {
-              final balance = double.tryParse(controller.text.replaceAll('.', '').replaceAll(',', ''));
-              if (balance == null) return;
+              final balance = _parseCurrency(controller.text);
+              if (balance <= 0 && controller.text.trim() == '0') return;
               await FirebaseService().updateAccount(account.copyWith(
                 balance: balance,
                 balanceUpdatedAt: DateTime.now(),
