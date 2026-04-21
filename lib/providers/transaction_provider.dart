@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/transaction.dart';
 import '../services/firebase_service.dart';
 
-final firebaseServiceProvider =
-    Provider<FirebaseService>((ref) => FirebaseService());
+final firebaseServiceProvider = Provider<FirebaseService>(
+  (ref) => FirebaseService(),
+);
 
 // Watch auth state — providers only load when user is logged in
 final authUserProvider = StreamProvider<User?>((ref) {
@@ -19,10 +20,10 @@ final transactionsProvider = StreamProvider<List<TransactionModel>>((ref) {
 
 final transactionsByAccountProvider =
     StreamProvider.family<List<TransactionModel>, String>((ref, accountId) {
-  return ref
-      .watch(firebaseServiceProvider)
-      .getTransactions(accountId: accountId);
-});
+      return ref
+          .watch(firebaseServiceProvider)
+          .getTransactions(accountId: accountId);
+    });
 
 // Total saldo kumulatif dari semua transaksi sepanjang waktu
 final totalBalanceProvider = Provider<_TotalBalance>((ref) {
@@ -48,13 +49,17 @@ class _TotalBalance {
 }
 
 // Monthly summary
-final monthlySummaryProvider =
-    Provider.family<MonthlySummary, DateTime>((ref, month) {
+final monthlySummaryProvider = Provider.family<MonthlySummary, DateTime>((
+  ref,
+  month,
+) {
   final transactions = ref.watch(transactionsProvider).value ?? [];
 
-  final monthTransactions = transactions.where((txn) =>
-      txn.transactionDate.year == month.year &&
-      txn.transactionDate.month == month.month);
+  final monthTransactions = transactions.where(
+    (txn) =>
+        txn.transactionDate.year == month.year &&
+        txn.transactionDate.month == month.month,
+  );
 
   double totalIncome = 0;
   double totalExpense = 0;
@@ -95,18 +100,20 @@ class MonthlySummary {
 // Category breakdown for pie chart
 final categoryBreakdownProvider =
     Provider.family<Map<String, double>, DateTime>((ref, month) {
-  final transactions = ref.watch(transactionsProvider).value ?? [];
+      final transactions = ref.watch(transactionsProvider).value ?? [];
 
-  final expenses = transactions.where((txn) =>
-      txn.transactionType == 'debit' &&
-      txn.transactionDate.year == month.year &&
-      txn.transactionDate.month == month.month);
+      final expenses = transactions.where(
+        (txn) =>
+            txn.transactionType == 'debit' &&
+            txn.transactionDate.year == month.year &&
+            txn.transactionDate.month == month.month,
+      );
 
-  final breakdown = <String, double>{};
-  for (final txn in expenses) {
-    final key = txn.categoryId.isEmpty ? 'Lainnya' : txn.categoryId;
-    breakdown[key] = (breakdown[key] ?? 0) + txn.amount;
-  }
+      final breakdown = <String, double>{};
+      for (final txn in expenses) {
+        final key = txn.categoryId.isEmpty ? 'Lainnya' : txn.categoryId;
+        breakdown[key] = (breakdown[key] ?? 0) + txn.amount;
+      }
 
-  return breakdown;
-});
+      return breakdown;
+    });
