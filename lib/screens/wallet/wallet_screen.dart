@@ -9,7 +9,7 @@ import '../../services/firebase_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common/glass_container.dart';
 
-final _idr = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+final _idr = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 2);
 
 /// Parse berbagai format angka BCA / umum:
 /// "52,853.71" → 52853.71   (koma=ribuan, titik=desimal)
