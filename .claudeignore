@@ -1,0 +1,26 @@
+# Build output
+build/
+
+# Dart/Flutter tools
+.dart_tool/
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Platform-specific (tidak dipakai, app adalah Flutter Web)
+android/
+ios/
+linux/
+macos/
+windows/
+
+# Lock files
+pubspec.lock
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Git
+.git/

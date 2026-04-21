@@ -219,8 +219,23 @@
   <script src="flutter_bootstrap.js" async></script>
 
   <script>
-    // Auto-reload when a new service worker activates so users always get the latest version
     if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(function(registration) {
+        // Cek update setiap kali app dibuka
+        registration.update();
+
+        registration.addEventListener('updatefound', function() {
+          var newWorker = registration.installing;
+          newWorker.addEventListener('statechange', function() {
+            // Segera reload saat SW baru selesai install
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              window.location.reload();
+            }
+          });
+        });
+      });
+
+      // Reload saat SW baru aktif mengambil kendali
       navigator.serviceWorker.addEventListener('controllerchange', function() {
         window.location.reload();
       });
