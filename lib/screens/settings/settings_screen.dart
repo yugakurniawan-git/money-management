@@ -13,6 +13,7 @@ import '../../widgets/common/staggered_list_animation.dart';
 import '../../widgets/common/gradient_button.dart';
 import '../categories/category_screen.dart';
 import '../investasi/investasi_screen.dart';
+import '../wallet/wallet_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -125,9 +126,44 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
-          // Kelola Kategori
+          // Dompet & Saldo
           StaggeredListItem(
             index: 2,
+            child: GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const WalletScreen()),
+              ),
+              child: GlassContainer(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet_outlined,
+                        color: AppColors.primary, size: 22),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Dompet & Saldo',
+                              style: TextStyle(fontWeight: FontWeight.w500)),
+                          Text('Kas, ATM, kartu kredit & tarik tunai',
+                              style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right,
+                        color: AppColors.textSecondary, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Kelola Kategori
+          StaggeredListItem(
+            index: 3,
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,

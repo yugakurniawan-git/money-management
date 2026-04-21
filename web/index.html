@@ -219,25 +219,16 @@
   <script src="flutter_bootstrap.js" async></script>
 
   <script>
+    // Unregister semua service worker lama (PWA strategy sekarang 'none')
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(function(registration) {
-        // Cek update setiap kali app dibuka
-        registration.update();
-
-        registration.addEventListener('updatefound', function() {
-          var newWorker = registration.installing;
-          newWorker.addEventListener('statechange', function() {
-            // Segera reload saat SW baru selesai install
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              window.location.reload();
-            }
-          });
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        var unregistered = false;
+        registrations.forEach(function(reg) {
+          reg.unregister();
+          unregistered = true;
         });
-      });
-
-      // Reload saat SW baru aktif mengambil kendali
-      navigator.serviceWorker.addEventListener('controllerchange', function() {
-        window.location.reload();
+        // Reload sekali agar browser load langsung dari server
+        if (unregistered) window.location.reload();
       });
     }
   </script>

@@ -44,6 +44,26 @@ class AccountModel {
     };
   }
 
+  AccountModel copyWith({
+    String? id,
+    String? bankName,
+    String? accountNumber,
+    String? ownerName,
+    String? accountType,
+    double? balance,
+    DateTime? balanceUpdatedAt,
+  }) {
+    return AccountModel(
+      id: id ?? this.id,
+      bankName: bankName ?? this.bankName,
+      accountNumber: accountNumber ?? this.accountNumber,
+      ownerName: ownerName ?? this.ownerName,
+      accountType: accountType ?? this.accountType,
+      balance: balance ?? this.balance,
+      balanceUpdatedAt: balanceUpdatedAt ?? this.balanceUpdatedAt,
+    );
+  }
+
   String get maskedAccountNumber {
     if (accountNumber.length <= 4) return accountNumber;
     return '****${accountNumber.substring(accountNumber.length - 4)}';
