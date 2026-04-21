@@ -32,7 +32,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           printf 'OPENAI_API_KEY=%s' "$OPENAI_API_KEY" > dart_env.txt
-          flutter build web --release --base-href / --pwa-strategy=online-first --dart-define-from-file=dart_env.txt
+          flutter build web --release --base-href / --pwa-strategy=none --dart-define-from-file=dart_env.txt
 
       - name: Deploy to cPanel via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
