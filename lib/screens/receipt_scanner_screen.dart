@@ -7,6 +7,7 @@ import '../models/transaction.dart';
 import '../models/transaction_item.dart';
 import '../providers/account_provider.dart';
 import '../providers/category_provider.dart';
+import '../screens/settings/settings_screen.dart';
 import '../services/ai_receipt_service.dart';
 import '../services/categorizer_service.dart';
 import '../services/firebase_service.dart';
@@ -60,9 +61,26 @@ class _ReceiptScannerScreenState extends ConsumerState<ReceiptScannerScreen> {
   Future<void> _saveItems() async {
     final accounts = ref.read(accountsProvider).value ?? [];
     if (accounts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tidak ada akun. Silakan tambahkan akun terlebih dahulu.')),
+      final goToSettings = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Belum Ada Akun'),
+          content: const Text('Kamu perlu menambahkan akun terlebih dahulu sebelum menyimpan transaksi. Buka Settings sekarang?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Buka Settings'),
+            ),
+          ],
+        ),
       );
+      if (goToSettings == true && mounted) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+      }
       return;
     }
 
