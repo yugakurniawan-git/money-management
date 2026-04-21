@@ -1,10 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/transaction_item.dart';
 
 class AIReceiptService {
-  String get _apiKey => dotenv.env['OPENAI_API_KEY'] ?? '';
+  static const String _apiKey = String.fromEnvironment('OPENAI_API_KEY');
 
   Future<List<TransactionItem>> scanReceiptItems(String base64Image) async {
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
