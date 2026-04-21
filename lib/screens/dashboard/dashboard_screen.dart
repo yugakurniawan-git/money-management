@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../theme/app_colors.dart';
+import '../../providers/account_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../providers/budget_provider.dart';
@@ -20,6 +21,7 @@ import '../insights/insights_screen.dart';
 import '../report/report_screen.dart';
 import '../goals/goals_screen.dart';
 import '../receipt_scanner_screen.dart';
+import '../wallet/wallet_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -38,6 +40,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
+    final accounts = ref.watch(accountsProvider).value ?? [];
     final summary = ref.watch(monthlySummaryProvider(now));
     final totalBalance = ref.watch(totalBalanceProvider);
     final transactions = ref.watch(transactionsProvider);
@@ -202,9 +205,71 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
 
+                // Account Balance Chips
+                if (accounts.isNotEmpty)
+                  StaggeredListItem(
+                    index: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: accounts.map((acc) {
+                            final icon = switch (acc.accountType) {
+                              'cash' => Icons.money,
+                              'ewallet' => Icons.account_balance_wallet,
+                              _ => Icons.credit_card,
+                            };
+                            return GestureDetector(
+                              onTap: () => Navigator.push(context,
+                                  MaterialPageRoute(builder: (_) => const WalletScreen())),
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? AppColors.darkSurface
+                                      : AppColors.lightSurface,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? AppColors.glassBorderDark
+                                        : AppColors.glassBorderLight,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(icon, size: 16, color: AppColors.primary),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(acc.bankName,
+                                            style: TextStyle(
+                                                fontSize: 11, color: AppColors.textSecondary)),
+                                        Text(
+                                          NumberFormat.compactCurrency(
+                                                  locale: 'id_ID', symbol: 'Rp', decimalDigits: 0)
+                                              .format(acc.balance),
+                                          style: const TextStyle(
+                                              fontSize: 13, fontWeight: FontWeight.w700),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ),
+
                 // Health Score Card
                 StaggeredListItem(
-                  index: 2,
+                  index: accounts.isNotEmpty ? 3 : 2,
                   child: _HealthScoreCard(healthScore: healthScore),
                 ),
 
