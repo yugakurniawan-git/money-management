@@ -217,5 +217,14 @@
   </script>
 
   <script src="flutter_bootstrap.js" async></script>
+
+  <script>
+    // Auto-reload when a new service worker activates so users always get the latest version
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', function() {
+        window.location.reload();
+      });
+    }
+  </script>
 </body>
 </html>
