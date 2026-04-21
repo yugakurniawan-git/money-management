@@ -1060,8 +1060,14 @@ class PdfParserService {
         (m) => '${m[1]}0${m[2]}',
       );
 
-      // "DB" sometimes OCR'd as "D8" or "D6" or "08"
+      // "DB" sometimes OCR'd as "D8" or "D6" or "Db"
       l = l.replaceAll(RegExp(r'\bD[B8b6]\b'), 'DB');
+      // "DB" sometimes OCR'd as "bB"/"BB"/"Bb" (D→b/B misread in image PDFs)
+      // Only replace when appearing right after a BCA amount to avoid false positives
+      l = l.replaceAllMapped(
+        RegExp(r'(\d{1,3}(?:,\d{3})+\.\d{2})\s+([bB][Bb8])\b'),
+        (m) => '${m[1]} DB',
+      );
       // "CR" sometimes OCR'd as "GR" or "C R"
       l = l.replaceAll(RegExp(r'\b[CG]R\b'), 'CR');
 
