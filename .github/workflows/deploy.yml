@@ -20,10 +20,19 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Check API key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "API key length: ${#OPENAI_API_KEY}"
+          if [ -z "$OPENAI_API_KEY" ]; then echo "WARNING: API key is EMPTY"; else echo "API key is set"; fi
+
       - name: Build Flutter Web
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: flutter build web --release --base-href / --dart-define=OPENAI_API_KEY="$OPENAI_API_KEY"
+        run: |
+          printf 'OPENAI_API_KEY=%s' "$OPENAI_API_KEY" > dart_env.txt
+          flutter build web --release --base-href / --dart-define-from-file=dart_env.txt
 
       - name: Deploy to cPanel via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
