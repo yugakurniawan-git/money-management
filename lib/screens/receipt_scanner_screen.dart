@@ -12,6 +12,47 @@ import '../services/ai_receipt_service.dart';
 import '../services/categorizer_service.dart';
 import '../services/firebase_service.dart';
 
+// Pilihan metode pembayaran
+class _PaymentMethod {
+  final String label;
+  final String description;
+  final IconData icon;
+  final String bankName;
+  final String accountType;
+
+  const _PaymentMethod({
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.bankName,
+    required this.accountType,
+  });
+}
+
+const _paymentMethods = [
+  _PaymentMethod(
+    label: 'Debit / QRIS',
+    description: 'Bayar lewat kartu debit atau scan QRIS',
+    icon: Icons.credit_card,
+    bankName: 'Debit / QRIS',
+    accountType: 'bank',
+  ),
+  _PaymentMethod(
+    label: 'Kas / Tunai',
+    description: 'Bayar pakai uang cash',
+    icon: Icons.money,
+    bankName: 'Kas',
+    accountType: 'cash',
+  ),
+  _PaymentMethod(
+    label: 'Kartu Kredit',
+    description: 'Bayar lewat kartu kredit',
+    icon: Icons.credit_score,
+    bankName: 'Kartu Kredit',
+    accountType: 'bank',
+  ),
+];
+
 class ReceiptScannerScreen extends ConsumerStatefulWidget {
   const ReceiptScannerScreen({Key? key}) : super(key: key);
 
@@ -42,42 +83,85 @@ class _ReceiptScannerScreenState extends ConsumerState<ReceiptScannerScreen> {
       try {
         final bytes = await image.readAsBytes();
         final base64Image = base64Encode(bytes);
-
         final items = await _aiService.scanReceiptItems(base64Image);
-
         setState(() {
           _scannedItems = items;
           _isLoading = false;
         });
       } catch (e) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal scan struk: $e')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal scan struk: $e')),
+          );
+        }
       }
     }
   }
 
+  Future<_PaymentMethod?> _showPaymentMethodPicker() {
+    return showModalBottomSheet<_PaymentMethod>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Bayar pakai apa?',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Pilih metode pembayaran agar tidak double pencatatan',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            ..._paymentMethods.map((method) => ListTile(
+                  leading: Icon(method.icon),
+                  title: Text(method.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(method.description, style: const TextStyle(fontSize: 12)),
+                  onTap: () => Navigator.pop(ctx, method),
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<AccountModel> _getOrCreateAccount(_PaymentMethod method, List<AccountModel> accounts) async {
+    // Cari akun yang sudah ada dengan nama yang sama
+    final existing = accounts.where((a) => a.bankName == method.bankName).firstOrNull;
+    if (existing != null) return existing;
+
+    // Buat akun baru jika belum ada
+    final newAccount = AccountModel(
+      id: const Uuid().v4(),
+      bankName: method.bankName,
+      accountNumber: '',
+      ownerName: '',
+      accountType: method.accountType,
+      balance: 0,
+      balanceUpdatedAt: DateTime.now(),
+    );
+    await FirebaseService().addAccount(newAccount);
+    return newAccount;
+  }
+
   Future<void> _saveItems() async {
-    var accounts = ref.read(accountsProvider).value ?? [];
-    if (accounts.isEmpty) {
-      final defaultAccount = AccountModel(
-        id: const Uuid().v4(),
-        bankName: 'Kas',
-        accountNumber: '',
-        ownerName: '',
-        accountType: 'cash',
-        balance: 0,
-        balanceUpdatedAt: DateTime.now(),
-      );
-      await FirebaseService().addAccount(defaultAccount);
-      accounts = [defaultAccount];
-    }
+    final selectedMethod = await _showPaymentMethodPicker();
+    if (selectedMethod == null || !mounted) return;
 
     setState(() => _isSaving = true);
 
     try {
-      final accountId = accounts.first.id;
+      final accounts = ref.read(accountsProvider).value ?? [];
+      final account = await _getOrCreateAccount(selectedMethod, accounts);
+
       final categories = ref.read(categoriesProvider).value ?? [];
       final categorizer = CategorizerService();
       final now = DateTime.now();
@@ -87,7 +171,7 @@ class _ReceiptScannerScreenState extends ConsumerState<ReceiptScannerScreen> {
         final categoryId = categorizer.categorize(item.name, categories) ?? 'Lainnya';
         return TransactionModel(
           id: uuid.v4(),
-          accountId: accountId,
+          accountId: account.id,
           amount: item.amount,
           description: item.name,
           rawDescription: item.name,
@@ -95,7 +179,7 @@ class _ReceiptScannerScreenState extends ConsumerState<ReceiptScannerScreen> {
           transactionType: 'debit',
           transactionDate: now,
           balanceAfter: 0,
-          note: 'Dari scan struk',
+          note: 'Dari scan struk (${selectedMethod.label})',
           importHash: '${now.millisecondsSinceEpoch}_${item.name}',
           createdAt: now,
         );
@@ -105,15 +189,17 @@ class _ReceiptScannerScreenState extends ConsumerState<ReceiptScannerScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${transactions.length} transaksi berhasil disimpan!')),
+          SnackBar(content: Text('${transactions.length} transaksi disimpan ke ${selectedMethod.label}')),
         );
         Navigator.pop(context);
       }
     } catch (e) {
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan: $e')),
+        );
+      }
     }
   }
 
