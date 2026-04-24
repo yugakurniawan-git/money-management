@@ -20,8 +20,9 @@ WORKDIR /app
 COPY . .
 
 # Ambil dependencies dan build web
+RUN flutter clean
 RUN flutter pub get
-RUN flutter build web --release
+RUN flutter build web --release --verbose
 
 # Stage 2: Runtime (Serving with Nginx)
 FROM nginx:stable-alpine
