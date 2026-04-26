@@ -19,16 +19,24 @@ WORKDIR /app
 # Copy files
 COPY . .
 
+# OPENAI_API_KEY di-pass dari Coolify build args
+ARG OPENAI_API_KEY=""
+
 # Ambil dependencies dan build web
 RUN flutter clean
 RUN flutter pub get
-RUN flutter build web --release --verbose
+RUN flutter build web --release --base-href / --pwa-strategy=none \
+    --dart-define=OPENAI_API_KEY=${OPENAI_API_KEY}
 
 # Stage 2: Runtime (Serving with Nginx)
 FROM nginx:stable-alpine
 
 # Copy hasil build ke folder nginx
 COPY --from=build /app/build/web /usr/share/nginx/html
+
+# SPA routing: semua path fallback ke index.html
+RUN printf 'server {\n  listen 80;\n  root /usr/share/nginx/html;\n  index index.html;\n  location / {\n    try_files $uri $uri/ /index.html;\n  }\n}\n' \
+    > /etc/nginx/conf.d/default.conf
 
 # Expose port 80
 EXPOSE 80
