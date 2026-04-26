@@ -381,9 +381,28 @@ class PdfParserService {
         continue;
       }
       if (_isSkippableLine(line)) continue;
-      if (line == 'PEND' && started) { continue; }
+      if (line == 'PEND' && started) {
+        // Each PEND is a separate pending transaction — flush the current block first
+        if (body.isNotEmpty || curIsPend) {
+          blocks.add((date: curDate, isPend: curIsPend, body: List.from(body)));
+        }
+        curIsPend = true;
+        curDate = null;
+        body = [];
+        continue;
+      }
       if (line.startsWith(':')) continue;
       if (line == 'Rekening') continue;
+      // "Bersambung" is a page separator, not end of data — flush and continue to page 2
+      if (line.toLowerCase().startsWith('bersambung')) {
+        if (body.isNotEmpty || curIsPend) {
+          blocks.add((date: curDate, isPend: curIsPend, body: List.from(body)));
+        }
+        curDate = null;
+        curIsPend = false;
+        body = [];
+        continue;
+      }
       if (_isTableEnd(line)) break;
 
       // PEND = start of transaction area (first TX has no date prefix)
@@ -598,6 +617,7 @@ class PdfParserService {
       final line = raw.trim();
       if (line.isEmpty) continue;
       if (_isSkippableLine(line)) continue;
+      if (line.toLowerCase().startsWith('bersambung')) { flush(null); continue; }
       if (_isTableEnd(line)) { flush(null); break; }
 
       // ── PEND main row: "PEND    desc_middle    amount DB|CR" ──
